@@ -19,9 +19,11 @@ async def fetch_event_info(date: str):
         response = await client.get(url, headers=headers)
         response.raise_for_status()
     
-    prune
-
-    return response.json()
+    data = response.json()
+    print(data)
+    cleaned_data = prune_data(data["data"])
+    print(cleaned_data)
+    return cleaned_data[:3]
 
 @router.get("/{date}")
 async def event_info(date: str):
@@ -30,10 +32,13 @@ async def event_info(date: str):
 
 #Remove empty columns from the json
 def prune_data(data):
+    print(data)
     events = []
+    print("In function")
     for building in data.get("buildings",[]):
-        for rooms in data.get("rooms",[]):
-            for event in roomt.get("events",[]):
+        print("Looping")
+        for room in building.get("rooms",[]):
+            for event in room.get("events",[]):
                 name = event.get("activity_name")
                 if name and "No Event Requesting" not in name:
                     events.append(event)    
