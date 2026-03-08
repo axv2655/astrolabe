@@ -8,6 +8,7 @@ import * as React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
+console.log('[DEBUG] API_URL:', API_URL);
 
 type ListItem = {
   name: string;
@@ -16,10 +17,7 @@ type ListItem = {
   time?: string;
 };
 
-type AutocompleteResult = {
-  name: string;
-  subtitle: string;
-};
+type AutocompleteResult = string;
 
 function useApi<T>(url: string | null): { data: T | null; loading: boolean; error: string | null } {
   const [data, setData] = React.useState<T | null>(null);
@@ -31,15 +29,19 @@ function useApi<T>(url: string | null): { data: T | null; loading: boolean; erro
     let cancelled = false;
     setLoading(true);
     setError(null);
+    console.log('[DEBUG] Fetching:', url);
     fetch(url)
       .then((res) => {
+        console.log('[DEBUG] Response status:', res.status, 'url:', url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then((json) => {
+        console.log('[DEBUG] Response data from', url, ':', JSON.stringify(json));
         if (!cancelled) setData(json);
       })
       .catch((err: Error) => {
+        console.error('[DEBUG] Fetch error for', url, ':', err.message);
         if (!cancelled) setError(err.message);
       })
       .finally(() => {
@@ -82,7 +84,7 @@ export default function LocationEditorScreen() {
   };
 
   const handleSuggestionPress = (item: AutocompleteResult) => {
-    setQuery(item.name);
+    setQuery(item);
     setShowSuggestions(false);
     router.push('/map');
   };
@@ -99,56 +101,45 @@ export default function LocationEditorScreen() {
       </Pressable>
 
       {/* Header */}
-      <View className="z-10 px-6 pb-6 pt-14">
-        <Text className="mb-2 text-xs font-medium uppercase tracking-wide text-[#6B8DD6]">
-          GOOD MORNING
-        </Text>
-        <Text className="mb-6 text-[32px] font-bold leading-tight tracking-tight text-white">
-          Where are you{'\n'}headed today?
-        </Text>
-
-        {/* Search bar + dropdown */}
-        <View className="relative z-30">
-          <View className="flex-row items-center gap-3 rounded-xl border border-[#2D3A4F80] bg-[#1A233280] px-4 py-3.5">
-            <Icon as={Search} size={20} className="text-[#4A5568]" />
-            <TextInput
-              placeholder="Enter destination or room code"
-              placeholderTextColor="#4A5568"
-              value={query}
-              onChangeText={handleQueryChange}
-              onFocus={() => setShowSuggestions(query.trim().length > 0)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-              returnKeyType="search"
-              className="flex-1 text-[15px] text-white"
-            />
-            {suggestionsLoading && <ActivityIndicator size="small" color="#6B8DD6" />}
-          </View>
-
-          {/* Autocomplete dropdown */}
-          {showSuggestions && suggestions && suggestions.length > 0 && (
-            <View className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-xl border border-[#2D3A4F80] bg-[#1A2332F2]">
-              {suggestions.map((item, index) => (
-                <Pressable
-                  key={index}
-                  onPress={() => handleSuggestionPress(item)}
-                  className="flex-row items-center gap-3 px-4 py-3"
-                  style={
-                    index < suggestions.length - 1
-                      ? { borderBottomWidth: 1, borderBottomColor: '#2D3A4F40' }
-                      : undefined
-                  }>
-                  <Icon as={Search} size={16} className="text-[#4A5568]" />
-                  <View className="flex-1">
-                    <Text className="text-[14px] font-medium text-white">{item.name}</Text>
-                    {item.subtitle ? (
-                      <Text className="text-[12px] text-[#6B7885]">{item.subtitle}</Text>
-                    ) : null}
-                  </View>
-                </Pressable>
-              ))}
-            </View>
-          )}
+      <View className="z-10 pb-4 pl-20 pt-14">
+        <Text className="mb-3 text-[32px] font-bold text-white">Where are you headed today?</Text>
+      </View>
+      {/* Search bar + dropdown */}
+      <View className="-pt-5 relative z-30 px-4 pb-3">
+        <View className="flex-row items-center gap-3 rounded-xl border border-[#2D3A4F80] bg-[#1A233280] px-4 py-3.5">
+          <Icon as={Search} size={20} className="text-[#4A5568]" />
+          <TextInput
+            placeholder="Enter destination or room code"
+            placeholderTextColor="#4A5568"
+            value={query}
+            onChangeText={handleQueryChange}
+            onFocus={() => setShowSuggestions(query.trim().length > 0)}
+            onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+            returnKeyType="search"
+            className="flex-1 text-[15px] text-white"
+          />
+          {suggestionsLoading && <ActivityIndicator size="small" color="#6B8DD6" />}
         </View>
+
+        {/* Autocomplete dropdown */}
+        {showSuggestions && suggestions && suggestions.length > 0 && (
+          <View className="absolute left-0 right-0 top-full z-40 mx-4 mt-1 overflow-hidden rounded-xl border border-[#2D3A4F80] bg-[#1A2332]">
+            {suggestions.map((item, index) => (
+              <Pressable
+                key={index}
+                onPress={() => handleSuggestionPress(item)}
+                className="flex-row items-center gap-3 px-4 py-3"
+                style={
+                  index < suggestions.length - 1
+                    ? { borderBottomWidth: 1, borderBottomColor: '#2D3A4F40' }
+                    : undefined
+                }>
+                <Icon as={Search} size={16} className="text-[#4A5568]" />
+                <Text className="flex-1 text-[14px] font-medium text-white">{item}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* Scrollable content */}
