@@ -39,16 +39,28 @@ export default function Screen() {
             2. Save to see your changes instantly.
           </Text>
         </View>
-        <View className="flex-row gap-2">
-          <Link href="https://reactnativereusables.com" asChild>
+        <View className="flex-col gap-2">
+          <View className="flex-row gap-2">
+            <Link href="https://reactnativereusables.com" asChild>
+              <Button>
+                <Text>Browse the Docs</Text>
+              </Button>
+            </Link>
+            <Link href="https://github.com/founded-labs/react-native-reusables" asChild>
+              <Button variant="ghost">
+                <Text>Star the Repo</Text>
+                <Icon as={StarIcon} />
+              </Button>
+            </Link>
+          </View>
+          <Link href="/camera" asChild>
             <Button>
-              <Text>Browse the Docs</Text>
+              <Text className="text-white group-active:text-white">Open Camera</Text>
             </Button>
           </Link>
-          <Link href="https://github.com/founded-labs/react-native-reusables" asChild>
-            <Button variant="ghost">
-              <Text>Star the Repo</Text>
-              <Icon as={StarIcon} />
+          <Link href="/ar" asChild>
+            <Button>
+              <Text className="text-white group-active:text-white">Open AR Scene</Text>
             </Button>
           </Link>
         </View>
