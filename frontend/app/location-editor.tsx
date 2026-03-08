@@ -94,7 +94,7 @@ const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
   const handleSuggestionPress = (item: AutocompleteResult) => {
     setQuery(item);
     setShowSuggestions(false);
-    router.push('/map');
+    router.push('/ar');
   };
 
   return (
@@ -110,7 +110,7 @@ const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
 
       {/* Header */}
       <View className="z-10 pb-4 pl-20 pt-14">
-        <Text className="mb-3 text-[32px] font-bold text-white">Where are you headed today?</Text>
+        <Text className="font-instrument mb-3 text-[32px] text-white">Where are you headed today?</Text>
       </View>
       {/* Search bar + dropdown */}
       <View className="-pt-5 relative z-30 px-4 pb-3">
@@ -143,7 +143,7 @@ const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
                     : undefined
                 }>
                 <Icon as={Search} size={16} className="text-[#4A5568]" />
-                <Text className="flex-1 text-[14px] font-medium text-white">{item}</Text>
+                <Text className="font-lato flex-1 text-[14px] text-white">{item}</Text>
               </Pressable>
             ))}
           </View>
@@ -155,11 +155,11 @@ const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
         {/* Recent section */}
         <View className="mb-8">
           <View className="mb-4 flex-row items-center justify-between">
-            <Text className="text-[11px] font-semibold uppercase tracking-widest text-[#6B7885]">
+            <Text className="font-lato-bold text-[11px] uppercase tracking-widest text-[#6B7885]">
               RECENT
             </Text>
             <Pressable>
-              <Text className="text-[13px] font-medium text-[#6B8DD6]">Clear all</Text>
+              <Text className="font-lato text-[13px] text-[#6B8DD6]">Clear all</Text>
             </Pressable>
           </View>
 
@@ -170,13 +170,13 @@ const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
               {historyData.map((item, index) => (
                 <Pressable
                   key={index}
-                  onPress={() => router.push('/map')}
+                  onPress={() => router.push('/ar')}
                   className="flex-row items-center gap-4 rounded-2xl border border-[#2D3A4F66] bg-[#1A233266] px-4 py-4">
                   <View className="h-10 w-10 items-center justify-center rounded-lg bg-[#6B8DD633]">
                     <Icon as={Building} size={20} className="text-[#6B8DD6]" />
                   </View>
                   <View className="flex-1">
-                    <Text className="mb-0.5 text-[15px] font-semibold text-white">{item.name}</Text>
+                    <Text className="font-lato-bold mb-0.5 text-[15px] text-white">{item.name}</Text>
                     <Text className="text-[13px] text-[#6B7885]">{item.subtitle}</Text>
                   </View>
                   {(item.date || item.time) && (
@@ -196,11 +196,11 @@ const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
         {/* Upcoming Events section */}
         <View className="mb-8">
           <View className="mb-4 flex-row items-center justify-between">
-            <Text className="text-[11px] font-semibold uppercase tracking-widest text-[#6B7885]">
+            <Text className="font-lato-bold text-[11px] uppercase tracking-widest text-[#6B7885]">
               UPCOMING EVENTS
             </Text>
             <Pressable>
-              <Text className="text-[13px] font-medium text-[#6B8DD6]">See all</Text>
+              <Text className="font-lato text-[13px] text-[#6B8DD6]">See all</Text>
             </Pressable>
           </View>
 
@@ -211,13 +211,13 @@ const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
               {eventsData.map((item, index) => (
                 <Pressable
                   key={index}
-                  onPress={() => router.push('/map')}
+                  onPress={() => router.push('/ar')}
                   className="flex-row items-center gap-4 rounded-2xl border border-[#2D3A4F66] bg-[#1A233266] px-4 py-4">
                   <View className="h-10 w-10 items-center justify-center rounded-lg bg-[#A474D433]">
                     <Icon as={Calendar} size={20} className="text-[#A474D4]" />
                   </View>
                   <View className="flex-1">
-                    <Text className="mb-0.5 text-[15px] font-semibold text-white">{item.name}</Text>
+                    <Text className="font-lato-bold mb-0.5 text-[15px] text-white">{item.name}</Text>
                     <Text className="text-[13px] text-[#6B7885]">{item.subtitle}</Text>
                   </View>
                   {(item.date || item.time) && (

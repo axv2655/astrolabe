@@ -60,7 +60,7 @@ export default function MapScreen() {
 
         {/* AR Navigate label */}
         <View className="rounded-full border border-[#2D3A4F80] bg-[#1A2332CC] px-6 py-2">
-          <Text className="text-[13px] font-semibold tracking-wider text-white">
+          <Text className="font-lato-bold text-[13px] tracking-wider text-white">
             AR NAVIGATE
           </Text>
         </View>
@@ -71,7 +71,7 @@ export default function MapScreen() {
             onPress={() => router.push('/profile')}
             className="h-12 w-12 items-center justify-center rounded-full border border-[#8B7EC880] bg-[#6B8DD6CC]"
           >
-            <Text className="text-base font-bold text-white">JD</Text>
+            <Text className="font-lato-bold text-base text-white">JD</Text>
           </Pressable>
           <Text className="mt-1 text-[10px] text-white/80">Settings</Text>
         </View>
@@ -89,7 +89,7 @@ export default function MapScreen() {
       <View className="absolute bottom-44 left-0 right-0 z-20 items-center">
         <View className="flex-row items-center gap-2 rounded-full bg-[#6B8DD6E6] px-6 py-3">
           <View className="h-2 w-2 rounded-full bg-white" />
-          <Text className="text-sm font-semibold tracking-wide text-white">
+          <Text className="font-lato-bold text-sm tracking-wide text-white">
             TURN LEFT IN 250 FT
           </Text>
         </View>
@@ -99,9 +99,9 @@ export default function MapScreen() {
       <View className="absolute bottom-0 left-0 right-0 z-30 rounded-t-3xl border-t border-[#2D3A4F80] bg-[#0A0E1AF2] px-6 py-6">
         {/* Destination Header */}
         <View className="mb-6 flex-row items-center justify-between">
-          <Text className="text-[28px] font-bold text-white">ECSW 1.315</Text>
+          <Text className="font-instrument text-[28px] text-white">ECSW 1.315</Text>
           <View className="rounded-full border border-[#6B8DD666] bg-[#6B8DD633] px-3 py-1.5">
-            <Text className="text-[13px] font-semibold text-[#6B8DD6]">
+            <Text className="font-lato-bold text-[13px] text-[#6B8DD6]">
               ~2 min
             </Text>
           </View>
@@ -115,7 +115,7 @@ export default function MapScreen() {
               <Icon as={ArrowLeft} size={20} className="text-[#6B8DD6]" />
             </View>
             <View className="flex-1">
-              <Text className="mb-1 text-base font-semibold text-white">
+              <Text className="font-lato-bold mb-1 text-base text-white">
                 Turn Left
               </Text>
               <Text className="text-[13px] text-[#6B7885]">
@@ -130,7 +130,7 @@ export default function MapScreen() {
               <Icon as={ArrowRight} size={20} className="text-[#6B8DD6]" />
             </View>
             <View className="flex-1">
-              <Text className="mb-1 text-base font-semibold text-white">
+              <Text className="font-lato-bold mb-1 text-base text-white">
                 Turn Right
               </Text>
               <Text className="text-[13px] text-[#6B7885]">

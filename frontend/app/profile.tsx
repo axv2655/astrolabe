@@ -49,7 +49,7 @@ function SettingsRow({
       >
         <Icon as={icon} size={20} color={iconColor} />
       </View>
-      <Text className={`flex-1 text-[15px] font-medium ${labelColor}`}>
+      <Text className={`flex-1 font-lato text-[15px] ${labelColor}`}>
         {label}
       </Text>
       {trailing ?? <ChevronRight />}
@@ -77,7 +77,7 @@ export default function ProfileScreen() {
       <ScrollView className="z-10 flex-1 px-6" contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Header */}
         <View className="pb-8 pt-14">
-          <Text className="text-center text-[11px] font-semibold uppercase tracking-widest text-[#4A5568]">
+          <Text className="font-lato-bold text-center text-[11px] uppercase tracking-widest text-[#4A5568]">
             PROFILE
           </Text>
         </View>
@@ -85,17 +85,17 @@ export default function ProfileScreen() {
         {/* Profile avatar and name */}
         <View className="mb-10 items-center">
           <View className="mb-4 h-24 w-24 items-center justify-center rounded-full border border-[#3D4A5F80] bg-[#2D3A4F99]">
-            <Text className="text-[32px] font-semibold text-white">JD</Text>
+            <Text className="font-lato-bold text-[32px] text-white">JD</Text>
           </View>
-          <Text className="mb-4 text-[28px] font-bold text-white">Gooner</Text>
+          <Text className="font-instrument mb-4 text-[28px] text-white">Gooner</Text>
           <View className="flex-row gap-2">
             <View className="rounded-full border border-[#2D3A4F66] bg-[#1A233280] px-4 py-1.5">
-              <Text className="text-[13px] font-medium text-[#6B8DD6]">
+              <Text className="font-lato text-[13px] text-[#6B8DD6]">
                 CS Major
               </Text>
             </View>
             <View className="rounded-full border border-[#2D3A4F66] bg-[#1A233280] px-4 py-1.5">
-              <Text className="text-[13px] font-medium text-[#6B8DD6]">
+              <Text className="font-lato text-[13px] text-[#6B8DD6]">
                 Freshman
               </Text>
             </View>
@@ -104,7 +104,7 @@ export default function ProfileScreen() {
 
         {/* Account Section */}
         <View className="mb-8">
-          <Text className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-[#4A5568]">
+          <Text className="font-lato-bold mb-4 text-[11px] uppercase tracking-widest text-[#4A5568]">
             ACCOUNT
           </Text>
           <View className="gap-3">
@@ -115,7 +115,7 @@ export default function ProfileScreen() {
 
         {/* Preferences Section */}
         <View className="mb-8">
-          <Text className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-[#4A5568]">
+          <Text className="font-lato-bold mb-4 text-[11px] uppercase tracking-widest text-[#4A5568]">
             PREFERENCES
           </Text>
           <View className="gap-3">
@@ -150,7 +150,7 @@ export default function ProfileScreen() {
 
         {/* Danger Zone Section */}
         <View className="mb-8">
-          <Text className="mb-4 text-[11px] font-semibold uppercase tracking-widest text-[#4A5568]">
+          <Text className="font-lato-bold mb-4 text-[11px] uppercase tracking-widest text-[#4A5568]">
             DANGER ZONE
           </Text>
           <View className="gap-3">

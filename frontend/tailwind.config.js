@@ -7,6 +7,14 @@ module.exports = {
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
+      fontFamily: {
+        instrument: ['InstrumentSerif_400Regular'],
+        'instrument-italic': ['InstrumentSerif_400Regular_Italic'],
+        'instrument-bold': ['PlayfairDisplay_700Bold'],
+        lato: ['Lato_400Regular'],
+        'lato-bold': ['Lato_700Bold'],
+        'lato-italic': ['Lato_400Regular_Italic'],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
