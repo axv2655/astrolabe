@@ -59,6 +59,25 @@ const ROOM_TO_NODE: Record<string, string> = {
 type Destination = { label: string; position: [number, number, number] };
 
 // =============================================
+// Hard-coded AR path for demo/testing
+// Simulates an L-shaped indoor hallway: forward, right turn, then to a room.
+// Coordinates: x = right, y = vertical, z = negative is forward.
+// =============================================
+const HARDCODED_DESTINATIONS: Destination[] = [
+  // Walk straight ahead down the hallway
+  { label: 'Hallway', position: [0, 0, -3] },
+  { label: 'Hallway', position: [0, 0, -6] },
+  { label: 'Hallway', position: [0, 0, -9] },
+  // Turn right at the corner
+  { label: 'Corner', position: [0, 0, -12] },
+  // Continue along the right corridor
+  { label: 'Hallway', position: [3, 0, -12] },
+  { label: 'Hallway', position: [6, 0, -12] },
+  // Arrive at destination room
+  { label: 'Room 1.315', position: [9, 0, -12] },
+];
+
+// =============================================
 // Trail settings
 // =============================================
 const ARROW_SPACING = 1.5;
@@ -116,17 +135,44 @@ ViroMaterials.createMaterials({
 // =============================================
 // Coordinate conversion
 // =============================================
+const METERS_PER_LAT = 110574;
+const METERS_PER_LNG = 93340; // cos(~33deg) * 111320, for UTD's latitude
+
 function latLngToArPosition(
   originLat: number,
   originLng: number,
   nodeLat: number,
   nodeLng: number
 ): [number, number, number] {
-  const METERS_PER_LAT = 110574;
-  const METERS_PER_LNG = 93340; // cos(~33deg) * 111320, for UTD's latitude
   const x = (nodeLng - originLng) * METERS_PER_LNG;
   const z = -(nodeLat - originLat) * METERS_PER_LAT; // -z = forward/north in AR
   return [x, 0, z];
+}
+
+/**
+ * Normalize AR positions so the max distance from origin fits within
+ * a reasonable AR scale. Needed when DB coords are test data (not real GPS).
+ */
+function normalizeArDestinations(
+  destinations: Destination[],
+  maxDistMeters: number = 10
+): Destination[] {
+  let furthest = 0;
+  for (const d of destinations) {
+    const dist = Math.sqrt(d.position[0] ** 2 + d.position[2] ** 2);
+    if (dist > furthest) furthest = dist;
+  }
+  if (furthest === 0 || furthest <= maxDistMeters) return destinations;
+
+  const scale = maxDistMeters / furthest;
+  return destinations.map((d) => ({
+    ...d,
+    position: [d.position[0] * scale, d.position[1], d.position[2] * scale] as [
+      number,
+      number,
+      number,
+    ],
+  }));
 }
 
 // =============================================
@@ -211,11 +257,14 @@ function generateFixedSpacingTrail(
   const dirX = dx / totalDist;
   const dirZ = dz / totalDist;
 
+  // Place arrows at camera height + downward offset so they sit on the floor
+  const floorY = cameraPos[1] + ARROW_Y_OFFSET;
+
   const positions: [number, number, number][] = [];
   let d = ARROW_SPACING;
 
   while (d < totalDist - 0.3) {
-    positions.push([cameraPos[0] + dirX * d, ARROW_Y_OFFSET, cameraPos[2] + dirZ * d]);
+    positions.push([cameraPos[0] + dirX * d, floorY, cameraPos[2] + dirZ * d]);
     d += ARROW_SPACING;
   }
 
@@ -281,9 +330,12 @@ const TurnIndicator = ({ turn }: { turn: TurnInfo | null }) => {
 // AR Scene (Phase 3 — NAVIGATING)
 // =============================================
 const TrailARScene = (props: any) => {
-  const { destinationIndex, destinations, onDistanceUpdate, onCameraPosUpdate } =
+  const { destinationIndex, destinations, onDistanceUpdate, onCameraPosUpdate, onDestinationsRotated } =
     props.arSceneNavigator.viroAppProps;
-  const destination = destinations[destinationIndex];
+
+  const [rotatedDests, setRotatedDests] = useState<Destination[]>(destinations);
+  const headingCapturedRef = useRef(false);
+  const destination = rotatedDests[destinationIndex];
 
   const [cameraPos, setCameraPos] = useState<[number, number, number]>([0, 0, 0]);
   const sceneRef = useRef<any>(null);
@@ -294,6 +346,28 @@ const TrailARScene = (props: any) => {
         try {
           const result = await sceneRef.current.getCameraOrientationAsync();
           if (result && result.position) {
+            // On first camera read, rotate destinations to align with camera heading
+            if (!headingCapturedRef.current && result.forward) {
+              headingCapturedRef.current = true;
+              const fx = result.forward[0];
+              const fz = result.forward[2];
+              // Yaw from -Z axis (default forward) to actual camera forward
+              const yaw = Math.atan2(fx, -fz);
+              const cosY = Math.cos(yaw);
+              const sinY = Math.sin(yaw);
+
+              const rotated = destinations.map((d: Destination) => ({
+                ...d,
+                position: [
+                  d.position[0] * cosY - d.position[2] * sinY,
+                  d.position[1],
+                  d.position[0] * sinY + d.position[2] * cosY,
+                ] as [number, number, number],
+              }));
+              setRotatedDests(rotated);
+              onDestinationsRotated(rotated);
+            }
+
             setCameraPos(result.position);
             onCameraPosUpdate(result.position);
             const dist = distanceXZ(result.position, destination.position);
@@ -318,7 +392,12 @@ const TrailARScene = (props: any) => {
       <ViroAmbientLight color="#ffffff" intensity={1000} />
 
       {trailPositions.map((pos, index) => {
-        const rotation = getRotationToTarget(pos, destination.position);
+        // Use destination XZ at the arrow's own Y to avoid pitch distortion from height differences
+        const rotation = getRotationToTarget(pos, [
+          destination.position[0],
+          pos[1],
+          destination.position[2],
+        ]);
         const isLead = index === 0;
         const opacity = isLead ? 1 : 0.55 + (index / Math.max(1, trailPositions.length)) * 0.35;
 
@@ -334,7 +413,12 @@ const TrailARScene = (props: any) => {
         );
       })}
 
-      <ViroNode position={destination.position}>
+      <ViroNode
+        position={[
+          destination.position[0],
+          cameraPos[1] + ARROW_Y_OFFSET,
+          destination.position[2],
+        ]}>
         <ViroPolyline
           points={destDiamond}
           thickness={0.03}
@@ -495,10 +579,7 @@ const NodeDetectionPhase = ({
         const label = CLASS_NAMES[maxIdx];
         handleDetection(label, confidence);
       } catch (e: any) {
-        console.log(
-          'Frame processing error:',
-          e?.message ?? e?.toString?.() ?? JSON.stringify(e)
-        );
+        console.log('Frame processing error:', e?.message ?? e?.toString?.() ?? JSON.stringify(e));
       }
     },
     [model]
@@ -582,9 +663,7 @@ const NodeDetectionPhase = ({
           <Text style={styles.detectingTitle}>Detecting your location...</Text>
           <Text style={styles.detectingPrediction}>{prediction}</Text>
 
-          <TouchableOpacity
-            style={styles.manualButton}
-            onPress={() => setShowManualPicker(true)}>
+          <TouchableOpacity style={styles.manualButton} onPress={() => setShowManualPicker(true)}>
             <Text style={styles.manualButtonText}>Select manually</Text>
           </TouchableOpacity>
         </View>
@@ -640,74 +719,87 @@ export default function ARScreen() {
       });
   }, []);
 
-  // Phase 1 → Phase 2: Node detected, fetch path
-  const handleNodeDetected = useCallback(
-    async (nodeId: string) => {
-      console.log('[AR] handleNodeDetected called with:', nodeId);
-      setStartNodeId(nodeId);
-      setPhase('LOADING');
+  // Phase 1 → Phase 2: Node detected, load path
+  const handleNodeDetected = useCallback(async (nodeId: string) => {
+    console.log('[AR] handleNodeDetected called with:', nodeId);
+    setStartNodeId(nodeId);
+    setLoadingError(null);
+    setPhase('LOADING');
 
-      // TODO: remove hardcoded destination once room-to-node mapping is populated
-      const destNodeId = '5';
+    // Hard-coded path for demo — skip API fetch
+    console.log('[AR] Using hard-coded destinations');
+    setDestinations(HARDCODED_DESTINATIONS);
+    setDestinationIndex(0);
+    console.log('[AR] Calling setPhase NAVIGATING');
+    setPhase('NAVIGATING');
 
-      try {
-        const url = `${API_URL}/path?a=${encodeURIComponent(nodeId)}&b=${encodeURIComponent(destNodeId)}`;
-        console.log('[AR] Fetching path:', url);
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000);
-
-        const res = await fetch(url, { signal: controller.signal });
-        clearTimeout(timeout);
-
-        if (!res.ok) {
-          const err = await res.text();
-          console.error('[AR] Path error:', err);
-          setLoadingError(`Path error: ${err}`);
-          return;
-        }
-
-        const data = await res.json();
-        console.log('[AR] Path response:', JSON.stringify(data));
-        const waypoints: { id: number; lat: number; lng: number }[] = data.waypoints;
-
-        if (!waypoints || waypoints.length === 0) {
-          console.error('[AR] No waypoints in response');
-          setLoadingError('No waypoints returned from server');
-          return;
-        }
-
-        console.log('[AR] Waypoints count:', waypoints.length);
-
-        // Convert lat/lng to AR coordinates, using first waypoint as origin
-        const originLat = waypoints[0].lat;
-        const originLng = waypoints[0].lng;
-
-        const arDestinations: Destination[] = waypoints.map((wp) => ({
-          label: String(wp.id),
-          position: latLngToArPosition(originLat, originLng, wp.lat, wp.lng),
-        }));
-
-        // Skip the first waypoint (user's current position) — navigate to the rest
-        const navDests = arDestinations.length > 1 ? arDestinations.slice(1) : arDestinations;
-        console.log('[AR] navDests:', JSON.stringify(navDests));
-        setDestinations(navDests);
-        setDestinationIndex(0);
-        console.log('[AR] Calling setPhase NAVIGATING');
-        setPhase('NAVIGATING');
-      } catch (err: any) {
-        const msg = err.name === 'AbortError'
-          ? 'Request timed out — is the backend running?'
-          : `Network error: ${err.message}`;
-        console.error('[AR] handleNodeDetected error:', err);
-        setLoadingError(msg);
-      }
-    },
-    []
-  );
+    // // TODO: remove hardcoded destination once room-to-node mapping is populated
+    // const destNodeId = '5';
+    //
+    // try {
+    //   const url = `${API_URL}/path?a=${encodeURIComponent(nodeId)}&b=${encodeURIComponent(destNodeId)}`;
+    //   console.log('[AR] Fetching path:', url);
+    //
+    //   const controller = new AbortController();
+    //   const timeout = setTimeout(() => controller.abort(), 10000);
+    //
+    //   const res = await fetch(url, { signal: controller.signal });
+    //   clearTimeout(timeout);
+    //
+    //   if (!res.ok) {
+    //     const err = await res.text();
+    //     console.error('[AR] Path error:', err);
+    //     setLoadingError(`Path error: ${err}`);
+    //     return;
+    //   }
+    //
+    //   const data = await res.json();
+    //   console.log('[AR] Path response:', JSON.stringify(data));
+    //   const waypoints: { id: number; lat: number; lng: number }[] = data.waypoints;
+    //
+    //   if (!waypoints || waypoints.length === 0) {
+    //     console.error('[AR] No waypoints in response');
+    //     setLoadingError('No waypoints returned from server');
+    //     return;
+    //   }
+    //
+    //   console.log('[AR] Waypoints count:', waypoints.length);
+    //
+    //   // Convert lat/lng to AR coordinates, using first waypoint as origin
+    //   const originLat = waypoints[0].lat;
+    //   const originLng = waypoints[0].lng;
+    //
+    //   const arDestinations: Destination[] = waypoints.map((wp) => ({
+    //     label: String(wp.id),
+    //     position: latLngToArPosition(originLat, originLng, wp.lat, wp.lng),
+    //   }));
+    //
+    //   // Skip the first waypoint (user's current position) — navigate to the rest
+    //   const sliced = arDestinations.length > 1 ? arDestinations.slice(1) : arDestinations;
+    //   const navDests = normalizeArDestinations(sliced);
+    //   console.log('[AR] navDests:', JSON.stringify(navDests));
+    //   setDestinations(navDests);
+    //   setDestinationIndex(0);
+    //   console.log('[AR] Calling setPhase NAVIGATING');
+    //   setPhase('NAVIGATING');
+    // } catch (err: any) {
+    //   console.error('[AR] handleNodeDetected CAUGHT ERROR:', err?.message, err?.stack || err);
+    //   const detail = err.name === 'AbortError'
+    //     ? 'Request timed out — is the backend running?'
+    //     : String(err?.message || err);
+    //   setLoadingError(detail);
+    // }
+  }, []);
 
   // Debug: log every render
-  console.log('[AR] Render — phase:', phase, 'destinations:', destinations.length, 'error:', loadingError);
+  console.log(
+    '[AR] Render — phase:',
+    phase,
+    'destinations:',
+    destinations.length,
+    'error:',
+    loadingError
+  );
 
   // Navigation state (Phase 3)
   const currentDest = destinations[destinationIndex];
@@ -729,6 +821,10 @@ export default function ARScreen() {
 
   const handleCameraPosUpdate = useCallback((pos: [number, number, number]) => {
     setCameraPos(pos);
+  }, []);
+
+  const handleDestinationsRotated = useCallback((rotated: Destination[]) => {
+    setDestinations(rotated);
   }, []);
 
   const handleArrived = useCallback(() => {
@@ -854,9 +950,6 @@ export default function ARScreen() {
           <>
             <ActivityIndicator size="large" color="#4F8EF7" />
             <Text style={styles.loadingText}>Computing route...</Text>
-            {destinationParam && (
-              <Text style={styles.loadingSubText}>To: {destinationParam}</Text>
-            )}
           </>
         )}
       </View>
@@ -907,6 +1000,7 @@ export default function ARScreen() {
           destinations,
           onDistanceUpdate: handleDistanceUpdate,
           onCameraPosUpdate: handleCameraPosUpdate,
+          onDestinationsRotated: handleDestinationsRotated,
         }}
         style={styles.flex}
       />
