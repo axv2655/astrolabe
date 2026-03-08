@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import {
   ViroAmbientLight,
@@ -10,20 +10,7 @@ import {
 } from '@reactvision/react-viro';
 
 // =============================================
-// DESTINATIONS — The series of nodes to navigate to.
-// Each destination is a specific point in AR space.
-//
-// HOW TO SET A SPECIFIC NODE/SPOT:
-// Just add an entry with the exact [x, y, z] coordinates
-// in meters relative to where the AR session started (your phone's
-// position when the app launched).
-//
-//   x: left(-) / right(+)
-//   y: down(-) / up(+)
-//   z: forward(-) / back(+)
-//
-// Example: A spot 5m to your right, at eye level, 10m ahead:
-//   { label: 'My Spot', position: [5.0, 0.0, -10.0] }
+// DESTINATIONS
 // =============================================
 const DESTINATIONS: { label: string; position: [number, number, number] }[] = [
   { label: 'Library Entrance', position: [3.0, 0.0, -6.0] },
@@ -33,12 +20,14 @@ const DESTINATIONS: { label: string; position: [number, number, number] }[] = [
 ];
 
 // Trail settings
-const ARROWS_PER_TRAIL = 7;
+const ARROW_SPACING = 1.5; // Fixed distance (meters) between each arrow
 const ARROW_Y_OFFSET = -0.8;
+const DIAMOND_RADIUS = 0.35; // Size of the destination diamond
+const ARRIVAL_RADIUS = 1.0; // How close (m) to destination to show "Next" button
 
-// Chevron arrow sizing (in meters)
-const CHEVRON_WIDTH = 0.18;   // half-width of the arrow "wings"
-const CHEVRON_LENGTH = 0.25;  // how long the arrow is tip-to-back
+// Chevron sizing
+const CHEVRON_WIDTH = 0.18;
+const CHEVRON_LENGTH = 0.25;
 const LEAD_CHEVRON_WIDTH = 0.25;
 const LEAD_CHEVRON_LENGTH = 0.35;
 
@@ -56,7 +45,6 @@ ViroMaterials.createMaterials({
     diffuseColor: '#33B7FF',
     blendMode: 'Add',
   },
-
   destinationMarker: {
     lightingModel: 'Constant',
     diffuseColor: '#FFD700',
@@ -64,15 +52,11 @@ ViroMaterials.createMaterials({
   },
 });
 
-
 // =============================================
 // Utility functions
 // =============================================
 
-/** Chevron arrow shape points (a ">" shape pointing along -Z). */
 function chevronPoints(w: number, l: number): [number, number, number][] {
-  // Draw a chevron: left wing → tip → right wing
-  //   (-w, 0, 0) → (0, 0, -l) → (w, 0, 0)
   return [
     [-w, 0, 0],
     [0, 0, -l],
@@ -80,38 +64,57 @@ function chevronPoints(w: number, l: number): [number, number, number][] {
   ];
 }
 
-/** Diamond/ring shape for destination marker (flat on XZ plane). */
 function diamondPoints(size: number): [number, number, number][] {
   return [
     [0, 0, -size],
     [size, 0, 0],
     [0, 0, size],
     [-size, 0, 0],
-    [0, 0, -size], // close the shape
+    [0, 0, -size],
   ];
 }
 
-/** Generate evenly-spaced positions from origin to target. */
-function generateTrailPositions(
-  origin: [number, number, number],
-  target: [number, number, number],
-  count: number
+/** XZ distance (ignoring height). */
+function distanceXZ(a: [number, number, number], b: [number, number, number]): number {
+  return Math.sqrt((a[0] - b[0]) ** 2 + (a[2] - b[2]) ** 2);
+}
+
+/**
+ * Generate arrow positions at FIXED intervals from camera toward destination.
+ * As you get further away, more arrows are created. As you get closer, fewer.
+ * The first arrow is placed ARROW_SPACING meters ahead of the camera.
+ */
+function generateFixedSpacingTrail(
+  cameraPos: [number, number, number],
+  target: [number, number, number]
 ): [number, number, number][] {
+  const dx = target[0] - cameraPos[0];
+  const dz = target[2] - cameraPos[2];
+  const totalDist = Math.sqrt(dx * dx + dz * dz);
+
+  if (totalDist < 0.5) return []; // Too close, no arrows needed
+
+  // Direction unit vector (XZ plane)
+  const dirX = dx / totalDist;
+  const dirZ = dz / totalDist;
+
   const positions: [number, number, number][] = [];
-  for (let i = 1; i <= count; i++) {
-    const t = i / (count + 1);
+  let d = ARROW_SPACING; // Start first arrow one spacing ahead of camera
+
+  while (d < totalDist - 0.3) {
+    // Don't place arrows right on top of destination
     positions.push([
-      origin[0] + (target[0] - origin[0]) * t,
+      cameraPos[0] + dirX * d,
       ARROW_Y_OFFSET,
-      origin[2] + (target[2] - origin[2]) * t,
+      cameraPos[2] + dirZ * d,
     ]);
+    d += ARROW_SPACING;
   }
+
   return positions;
 }
 
-
-
-/** Calculate rotation [pitch, yaw, roll] so an object at `from` points toward `to`. */
+/** Calculate rotation so an object at `from` points toward `to`. */
 function getRotationToTarget(
   from: [number, number, number],
   to: [number, number, number]
@@ -120,9 +123,6 @@ function getRotationToTarget(
   const dy = to[1] - from[1];
   const dz = to[2] - from[2];
 
-  // Viro positive Y rotation = counter-clockwise from above.
-  // Our chevron points along -Z in local space, so we negate
-  // the atan2 result to get clockwise rotation toward the target.
   const yawRad = Math.atan2(dx, -dz);
   const yawDeg = -(yawRad * 180) / Math.PI;
 
@@ -134,32 +134,51 @@ function getRotationToTarget(
 }
 
 // =============================================
-// AR Scene — renders the trail of ViroPolyline arrows
+// AR Scene
 // =============================================
 const TrailARScene = (props: any) => {
-  const { destinationIndex } = props.arSceneNavigator.viroAppProps;
+  const { destinationIndex, onDistanceUpdate } = props.arSceneNavigator.viroAppProps;
   const destination = DESTINATIONS[destinationIndex];
-  const origin: [number, number, number] = [0, 0, 0];
 
-  const trailPositions = useMemo(
-    () => generateTrailPositions(origin, destination.position, ARROWS_PER_TRAIL),
-    [destinationIndex]
-  );
+  const [cameraPos, setCameraPos] = useState<[number, number, number]>([0, 0, 0]);
+  const sceneRef = useRef<any>(null);
 
-  // Pre-compute chevron shapes once
+  // Poll camera position every 100ms for faster updates
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (sceneRef.current) {
+        try {
+          const result = await sceneRef.current.getCameraOrientationAsync();
+          if (result && result.position) {
+            setCameraPos(result.position);
+            // Report distance to parent for button visibility
+            const dist = distanceXZ(result.position, destination.position);
+            onDistanceUpdate(dist);
+          }
+        } catch {
+          // Camera not ready yet
+        }
+      }
+    }, 100);
+    return () => clearInterval(interval);
+  }, [destinationIndex]);
+
+  // Generate fixed-spacing trail from camera to destination
+  const trailPositions = generateFixedSpacingTrail(cameraPos, destination.position);
+
   const trailChevron = useMemo(() => chevronPoints(CHEVRON_WIDTH, CHEVRON_LENGTH), []);
   const leadChevron = useMemo(() => chevronPoints(LEAD_CHEVRON_WIDTH, LEAD_CHEVRON_LENGTH), []);
-  const destDiamond = useMemo(() => diamondPoints(0.35), []);
+  const destDiamond = useMemo(() => diamondPoints(DIAMOND_RADIUS), []);
 
   return (
-    <ViroARScene>
+    <ViroARScene ref={sceneRef}>
       <ViroAmbientLight color="#ffffff" intensity={1000} />
 
-      {/* Trail of chevron arrows */}
+      {/* Trail of chevron arrows at fixed spacing */}
       {trailPositions.map((pos, index) => {
         const rotation = getRotationToTarget(pos, destination.position);
         const isLead = index === 0;
-        const opacity = isLead ? 1 : 0.5 + (index / trailPositions.length) * 0.35;
+        const opacity = isLead ? 1 : 0.55 + (index / Math.max(1, trailPositions.length)) * 0.35;
 
         return (
           <ViroNode
@@ -177,10 +196,8 @@ const TrailARScene = (props: any) => {
         );
       })}
 
-      {/* Destination marker — a diamond at the target */}
-      <ViroNode
-        position={destination.position}
-      >
+      {/* Gold destination diamond */}
+      <ViroNode position={destination.position}>
         <ViroPolyline
           points={destDiamond}
           thickness={0.03}
@@ -197,11 +214,21 @@ const TrailARScene = (props: any) => {
 // =============================================
 export default function ARScreen() {
   const [destinationIndex, setDestinationIndex] = useState(0);
+  const [distToDest, setDistToDest] = useState<number>(Infinity);
   const currentDest = DESTINATIONS[destinationIndex];
   const isLast = destinationIndex === DESTINATIONS.length - 1;
   const isFinished = destinationIndex >= DESTINATIONS.length;
 
+  // User is "at" the destination when inside the arrival radius
+  const isAtDestination = distToDest < ARRIVAL_RADIUS;
+
+  // Callback from AR scene reporting distance
+  const handleDistanceUpdate = useCallback((dist: number) => {
+    setDistToDest(dist);
+  }, []);
+
   const handleArrived = useCallback(() => {
+    setDistToDest(Infinity); // Reset for next destination
     if (isLast) {
       setDestinationIndex(DESTINATIONS.length);
     } else {
@@ -210,6 +237,7 @@ export default function ARScreen() {
   }, [isLast]);
 
   const handleRestart = useCallback(() => {
+    setDistToDest(Infinity);
     setDestinationIndex(0);
   }, []);
 
@@ -233,7 +261,10 @@ export default function ARScreen() {
         initialScene={{
           scene: TrailARScene as any,
         }}
-        viroAppProps={{ destinationIndex }}
+        viroAppProps={{
+          destinationIndex,
+          onDistanceUpdate: handleDistanceUpdate,
+        }}
         style={styles.flex}
       />
 
@@ -258,17 +289,21 @@ export default function ARScreen() {
             Navigating to {destinationIndex + 1} of {DESTINATIONS.length}
           </Text>
           <Text style={styles.waypointName}>{currentDest.label}</Text>
-          <Text style={styles.coords}>
-            [{currentDest.position[0]}, {currentDest.position[1]},{' '}
-            {currentDest.position[2]}]
+          <Text style={styles.distance}>
+            {distToDest === Infinity
+              ? 'Locating...'
+              : `${distToDest.toFixed(1)} m away`}
           </Text>
         </View>
 
-        <TouchableOpacity style={styles.button} onPress={handleArrived}>
-          <Text style={styles.buttonText}>
-            {isLast ? '✓ Final Destination Reached' : "I've Arrived → Next"}
-          </Text>
-        </TouchableOpacity>
+        {/* Only show Next button when user is inside the gold diamond */}
+        {isAtDestination && (
+          <TouchableOpacity style={styles.button} onPress={handleArrived}>
+            <Text style={styles.buttonText}>
+              {isLast ? '✓ Final Destination Reached' : "Next Destination →"}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -329,11 +364,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: 'bold',
   },
-  coords: {
-    color: '#666',
-    fontSize: 12,
+  distance: {
+    color: '#4F8EF7',
+    fontSize: 18,
+    fontWeight: '600',
     marginTop: 4,
-    fontFamily: 'monospace',
   },
   button: {
     backgroundColor: '#4F8EF7',
