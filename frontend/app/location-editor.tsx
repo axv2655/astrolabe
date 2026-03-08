@@ -14,6 +14,7 @@ console.log('[DEBUG] API_URL:', API_URL);
 type ListItem = {
   name: string;
   subtitle: string;
+  club?: string;
   date?: string;
   time?: string;
 };
@@ -217,13 +218,15 @@ const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
                     <Icon as={Calendar} size={20} className="text-[#A474D4]" />
                   </View>
                   <View className="flex-1">
-                    <Text className="font-lato-bold mb-0.5 text-[15px] text-white">{item.name}</Text>
-                    <Text className="text-[13px] text-[#6B7885]">{item.subtitle}</Text>
+                    <Text className="font-lato-bold mb-0.5 text-[15px] text-white">{item.subtitle}</Text>
+                    {item.club ? (
+                      <Text className="text-[13px] text-[#A474D4]">{item.club}</Text>
+                    ) : null}
+                    <Text className="text-[12px] text-[#6B7885]">{item.name}</Text>
                   </View>
-                  {(item.date || item.time) && (
+                  {item.time && (
                     <View className="items-end">
-                      {item.date && <Text className="text-xs text-[#6B7885]">{item.date}</Text>}
-                      {item.time && <Text className="text-xs text-[#6B7885]">{item.time}</Text>}
+                      <Text className="text-xs text-[#6B7885]">{item.time}</Text>
                     </View>
                   )}
                 </Pressable>

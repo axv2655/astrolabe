@@ -173,13 +173,20 @@ async def event_info():
                 name = event.get("eventName") or event.get("section", "")
                 filtered_name = name and "No Event Requesting" not in name
                 if filtered_name and has_digit:
-                    start = event.get("start_time", "")
-                    end = event.get("end_time", "")
+                    start_raw = event.get("dateTimeStart", "")
+                    end_raw = event.get("dateTimeEnd", "")
+                    try:
+                        start = datetime.fromisoformat(start_raw).strftime("%I:%M %p").lstrip("0") if start_raw else ""
+                        end = datetime.fromisoformat(end_raw).strftime("%I:%M %p").lstrip("0") if end_raw else ""
+                    except ValueError:
+                        start, end = start_raw, end_raw
                     time_str = f"{start} - {end}" if start and end else start or end
+                    club = event.get("organizationName", "")
                     events.append(
                         {
                             "name": location,
                             "subtitle": name,
+                            "club": club,
                             "date": event_date,
                             "time": time_str,
                         }

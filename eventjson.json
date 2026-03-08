@@ -1,0 +1,212 @@
+{
+  "status": 200,
+  "message": "success",
+  "data": {
+    "date": "2026-03-08",
+    "buildings": [
+      {
+        "building": "Student Union (SU)",
+        "rooms": [
+          {
+            "room": "Galaxy  Room - C",
+            "events": [
+              {
+                "eventName": "SKY CAMPUS HAPPINESS RETREAT",
+                "organizationName": "SKY Campus Happiness",
+                "contactName": "Aryaa Singh",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T10:00:00-05:00",
+                "dateTimeEnd": "2026-03-08T14:00:00-05:00",
+                "teardownMinutes": 60,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              },
+              {
+                "eventName": "Rangam Practice",
+                "organizationName": "Rangam: Indian Classical Dance Team",
+                "contactName": "Thanushri Bathey",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T19:00:00-05:00",
+                "dateTimeEnd": "2026-03-08T22:00:00-05:00",
+                "teardownMinutes": 0,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              }
+            ]
+          },
+          {
+            "room": "Galaxy  Room - B",
+            "events": [
+              {
+                "eventName": "SKY Campus - Weekly Followup",
+                "organizationName": "SKY Campus Happiness",
+                "contactName": "Tejasri Gumberaopeta",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T10:00:00-05:00",
+                "dateTimeEnd": "2026-03-08T14:00:00-05:00",
+                "teardownMinutes": 60,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              }
+            ]
+          },
+          {
+            "room": "Artemis Hall II",
+            "events": [
+              {
+                "eventName": "MAPS Medical School Fair",
+                "organizationName": "Minority Association of Pre-Medical Students",
+                "contactName": "Steven Dhaliwal",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T11:00:00-05:00",
+                "dateTimeEnd": "2026-03-08T17:00:00-05:00",
+                "teardownMinutes": 60,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              }
+            ]
+          },
+          {
+            "room": "Galaxy  Room  (A & B)",
+            "events": [
+              {
+                "eventName": "Theta Chapter",
+                "organizationName": "Kappa Alpha Theta",
+                "contactName": "Charidan Matties",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T15:00:00-05:00",
+                "dateTimeEnd": "2026-03-08T21:00:00-05:00",
+                "teardownMinutes": 60,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              }
+            ]
+          },
+          {
+            "room": "Artemis Hall (I & II)",
+            "events": [
+              {
+                "eventName": "Iftar",
+                "organizationName": "Bangladeshi Graduate Students' Association",
+                "contactName": "Md Shadman Sakib Showrov",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T18:00:00-05:00",
+                "dateTimeEnd": "2026-03-08T21:00:00-05:00",
+                "teardownMinutes": 60,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              }
+            ]
+          },
+          {
+            "room": "Artemis Hall I",
+            "events": [
+              {
+                "eventName": "First Love Fellowship",
+                "organizationName": "FirstLove Fellowship",
+                "contactName": "Nneoma Okafor",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T09:30:00-05:00",
+                "dateTimeEnd": "2026-03-08T14:00:00-05:00",
+                "teardownMinutes": 60,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              },
+              {
+                "eventName": "Iftar",
+                "organizationName": "Bangladeshi Graduate Students' Association",
+                "contactName": "Md Shadman Sakib Showrov",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T15:00:00-05:00",
+                "dateTimeEnd": "2026-03-08T17:30:00-05:00",
+                "teardownMinutes": 30,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "building": "SSA",
+        "rooms": [
+          {
+            "room": "12.471",
+            "events": [
+              {
+                "eventName": "Chapter Meeting",
+                "organizationName": "Chi Alpha Iota Diaternity",
+                "contactName": "Becca Alexander",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T11:00:00-05:00",
+                "dateTimeEnd": "2026-03-08T13:00:00-05:00",
+                "teardownMinutes": 30,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              },
+              {
+                "eventName": "Meetings ",
+                "organizationName": "Alpha Kappa Alpha Sorority, Inc.",
+                "contactName": "Raven Busby",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T14:00:00-05:00",
+                "dateTimeEnd": "2026-03-08T19:00:00-05:00",
+                "teardownMinutes": 30,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              }
+            ]
+          },
+          {
+            "room": "14.245",
+            "events": [
+              {
+                "eventName": "SKY Happiness Retreat",
+                "organizationName": "SKY Campus Happiness",
+                "contactName": "Tejasri Gumberaopeta",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T14:00:00-05:00",
+                "dateTimeEnd": "2026-03-08T17:00:00-05:00",
+                "teardownMinutes": 30,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              }
+            ]
+          },
+          {
+            "room": "14.244",
+            "events": [
+              {
+                "eventName": "Phi delta theta chapter",
+                "organizationName": "Phi Delta Theta",
+                "contactName": "Quentin Ghelardini",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T17:00:00-05:00",
+                "dateTimeEnd": "2026-03-08T22:00:00-05:00",
+                "teardownMinutes": 30,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              }
+            ]
+          },
+          {
+            "room": "14.510",
+            "events": [
+              {
+                "eventName": "UTD Raftaar",
+                "organizationName": "UTD Raftaar",
+                "contactName": "Rishi Srivatsan",
+                "setupMinutes": 0,
+                "dateTimeStart": "2026-03-08T19:30:00-05:00",
+                "dateTimeEnd": "2026-03-08T22:00:00-05:00",
+                "teardownMinutes": 60,
+                "statusDescription": "Confirmed",
+                "statusColor": "#5fe0b7"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
