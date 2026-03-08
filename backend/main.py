@@ -7,9 +7,20 @@ from pydantic import BaseModel
 from motor.motor_asyncio import AsyncIOMotorClient
 import certifi
 import secrets
+from fastapi.middleware.cors import CORSMiddleware
+
+
 
 load_dotenv()
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 x_api_key = os.getenv("x_api_key")
 
