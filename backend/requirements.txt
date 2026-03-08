@@ -1,8 +1,10 @@
 fastapi
 uvicorn
 pydantic
-requests
-pymongo
+motor
 httpx
-datetime
-dotenv
+python-dotenv
+certifi
+google-genai
+elevenlabs
+python-multipart
