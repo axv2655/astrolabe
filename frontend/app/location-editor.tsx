@@ -86,7 +86,7 @@ export default function LocationEditorScreen() {
   const handleSuggestionPress = (item: AutocompleteResult) => {
     setQuery(item);
     setShowSuggestions(false);
-    router.push('/map');
+    router.push('/ar');
   };
 
   return (
@@ -162,7 +162,7 @@ export default function LocationEditorScreen() {
               {historyData.map((item, index) => (
                 <Pressable
                   key={index}
-                  onPress={() => router.push('/map')}
+                  onPress={() => router.push('/ar')}
                   className="flex-row items-center gap-4 rounded-2xl border border-[#2D3A4F66] bg-[#1A233266] px-4 py-4">
                   <View className="h-10 w-10 items-center justify-center rounded-lg bg-[#6B8DD633]">
                     <Icon as={Building} size={20} className="text-[#6B8DD6]" />
@@ -203,7 +203,7 @@ export default function LocationEditorScreen() {
               {eventsData.map((item, index) => (
                 <Pressable
                   key={index}
-                  onPress={() => router.push('/map')}
+                  onPress={() => router.push('/ar')}
                   className="flex-row items-center gap-4 rounded-2xl border border-[#2D3A4F66] bg-[#1A233266] px-4 py-4">
                   <View className="h-10 w-10 items-center justify-center rounded-lg bg-[#A474D433]">
                     <Icon as={Calendar} size={20} className="text-[#A474D4]" />
