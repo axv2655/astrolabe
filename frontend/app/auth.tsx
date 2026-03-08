@@ -10,8 +10,9 @@ import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-nati
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 export default function AuthScreen() {
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
+  //I LOVE COMMITING SECRETS TO GITHUB
+  const [email, setEmail] = React.useState('tharunsevvel@gmail.com');
+  const [password, setPassword] = React.useState('123');
   const [loading, setLoading] = React.useState(false);
 
   const handleSubmit = async () => {
@@ -53,26 +54,19 @@ export default function AuthScreen() {
       {/* Back button */}
       <Pressable
         onPress={() => router.back()}
-        className="absolute left-5 top-14 z-20 h-10 w-10 items-center justify-center rounded-full border border-[#2D3A4F80] bg-[#1A233299]"
-      >
+        className="absolute left-5 top-14 z-20 h-10 w-10 items-center justify-center rounded-full border border-[#2D3A4F80] bg-[#1A233299]">
         <Icon as={ArrowLeft} size={18} className="text-[#6B8DD6]" />
       </Pressable>
 
       {/* Centered content */}
       <View className="z-10 w-full max-w-[360px] items-center">
         {/* Title */}
-        <Text className="mb-12 text-[32px] font-bold text-white">
-          Astrolabe
-        </Text>
+        <Text className="mb-12 font-instrument text-[80px] text-white">Astrolabe</Text>
 
         {/* Welcome text */}
         <View className="mb-10 items-center">
-          <Text className="mb-3 text-2xl font-semibold text-white">
-            Welcome Back
-          </Text>
-          <Text className="text-sm text-[#6B7885]">
-            Sign in to continue your journey
-          </Text>
+          <Text className="mb-3 font-instrument text-2xl text-white">Welcome Back</Text>
+          <Text className="text-sm text-[#6B7885]">Sign in to continue your journey</Text>
         </View>
 
         {/* Email input */}
@@ -106,18 +100,17 @@ export default function AuthScreen() {
         <Pressable
           onPress={handleSubmit}
           disabled={loading}
-          className="mt-4 w-full overflow-hidden rounded-xl"
-        >
+          className="mt-4 w-full overflow-hidden rounded-xl">
           <LinearGradient
             colors={['#6B8DD6', '#8B7EC8', '#A474D4']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
-            className="items-center px-8 py-4"
-          >
-            {loading
-              ? <ActivityIndicator color="white" />
-              : <Text className="text-base font-semibold text-white">Log in / Sign Up</Text>
-            }
+            className="items-center px-8 py-4">
+            {loading ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text className="font-lato-bold text-base text-white">Log in / Sign Up</Text>
+            )}
           </LinearGradient>
         </Pressable>
       </View>

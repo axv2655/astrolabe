@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Octicons from '@expo/vector-icons/Octicons';
 import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Audio } from 'expo-av';
 import { File, Paths } from 'expo-file-system/next';
@@ -145,8 +146,7 @@ function getUpcomingTurn(
   // Then B → C → D, etc.
 
   // Build the "path ahead" starting from the previous reference point
-  const prevPos =
-    currentIndex > 0 ? DESTINATIONS[currentIndex - 1].position : cameraPos;
+  const prevPos = currentIndex > 0 ? DESTINATIONS[currentIndex - 1].position : cameraPos;
 
   // Walk forward looking for the first non-straight angle
   for (let i = currentIndex; i < DESTINATIONS.length - 1; i++) {
@@ -191,11 +191,7 @@ function generateFixedSpacingTrail(
   let d = ARROW_SPACING;
 
   while (d < totalDist - 0.3) {
-    positions.push([
-      cameraPos[0] + dirX * d,
-      ARROW_Y_OFFSET,
-      cameraPos[2] + dirZ * d,
-    ]);
+    positions.push([cameraPos[0] + dirX * d, ARROW_Y_OFFSET, cameraPos[2] + dirZ * d]);
     d += ARROW_SPACING;
   }
 
@@ -243,10 +239,7 @@ const TurnIndicator = ({ turn }: { turn: TurnInfo | null }) => {
   const color = isLeft ? '#5B9BFF' : '#FF6B6B';
 
   // Contextual distance label
-  const proximity =
-    turn.nodesAhead === 1
-      ? 'at next node'
-      : `in ${turn.nodesAhead} nodes`;
+  const proximity = turn.nodesAhead === 1 ? 'at next node' : `in ${turn.nodesAhead} nodes`;
 
   return (
     <View style={[styles.turnBox, { borderColor: color }]}>
@@ -312,11 +305,7 @@ const TrailARScene = (props: any) => {
         const opacity = isLead ? 1 : 0.55 + (index / Math.max(1, trailPositions.length)) * 0.35;
 
         return (
-          <ViroNode
-            key={`arrow-${destinationIndex}-${index}`}
-            position={pos}
-            rotation={rotation}
-          >
+          <ViroNode key={`arrow-${destinationIndex}-${index}`} position={pos} rotation={rotation}>
             <ViroPolyline
               points={isLead ? leadChevron : trailChevron}
               thickness={isLead ? 0.025 : 0.015}
@@ -394,7 +383,9 @@ export default function ARScreen() {
     Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true });
   }, []);
   useEffect(() => {
-    return () => { sound?.unloadAsync(); };
+    return () => {
+      sound?.unloadAsync();
+    };
   }, [sound]);
 
   const handleGemini = useCallback(async () => {
@@ -502,12 +493,11 @@ export default function ARScreen() {
         style={styles.geminiButton}
         onPress={handleGemini}
         activeOpacity={0.7}
-        disabled={geminiLoading}
-      >
+        disabled={geminiLoading}>
         {geminiLoading ? (
           <ActivityIndicator color="#fff" size="small" />
         ) : (
-          <Text style={styles.geminiButtonIcon}>&#10024;</Text>
+          <Octicons name="sparkles-fill" size={24} color="white" />
         )}
       </TouchableOpacity>
 
@@ -543,9 +533,7 @@ export default function ARScreen() {
           </Text>
           <Text style={styles.waypointName}>{currentDest.label}</Text>
           <Text style={styles.distance}>
-            {distToDest === Infinity
-              ? 'Locating...'
-              : `${distToDest.toFixed(1)} m away`}
+            {distToDest === Infinity ? 'Locating...' : `${distToDest.toFixed(1)} m away`}
           </Text>
         </View>
 
@@ -553,7 +541,7 @@ export default function ARScreen() {
         {isAtDestination && (
           <TouchableOpacity style={styles.button} onPress={handleArrived}>
             <Text style={styles.buttonText}>
-              {isLast ? '✓ Final Destination Reached' : "Next Destination →"}
+              {isLast ? '✓ Final Destination Reached' : 'Next Destination →'}
             </Text>
           </TouchableOpacity>
         )}
@@ -615,24 +603,25 @@ const styles = StyleSheet.create({
   turnArrowIcon: {
     fontSize: 32,
     marginRight: 12,
-    fontWeight: 'bold',
+    fontFamily: 'Lato_700Bold',
   },
   turnStraightIcon: {
     fontSize: 28,
     marginRight: 12,
     color: '#4CAF50',
-    fontWeight: 'bold',
+    fontFamily: 'Lato_700Bold',
   },
   turnTextCol: {
     flex: 1,
   },
   turnMainText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontFamily: 'Lato_700Bold',
     color: '#fff',
   },
   turnSubText: {
     fontSize: 12,
+    fontFamily: 'Lato_400Regular',
     color: '#999',
     marginTop: 2,
   },
@@ -648,17 +637,18 @@ const styles = StyleSheet.create({
   label: {
     color: '#aaa',
     fontSize: 13,
+    fontFamily: 'Lato_400Regular',
     marginBottom: 2,
   },
   waypointName: {
     color: '#fff',
     fontSize: 22,
-    fontWeight: 'bold',
+    fontFamily: 'InstrumentSerif_400Regular',
   },
   distance: {
     color: '#4F8EF7',
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: 'Lato_700Bold',
     marginTop: 4,
   },
   button: {
@@ -672,7 +662,7 @@ const styles = StyleSheet.create({
   buttonText: {
     color: '#fff',
     fontSize: 16,
-    fontWeight: '600',
+    fontFamily: 'Lato_700Bold',
   },
   finishedContainer: {
     flex: 1,
@@ -688,12 +678,13 @@ const styles = StyleSheet.create({
   finishedTitle: {
     color: '#fff',
     fontSize: 28,
-    fontWeight: 'bold',
+    fontFamily: 'InstrumentSerif_400Regular',
     marginBottom: 8,
   },
   finishedSub: {
     color: '#888',
     fontSize: 16,
+    fontFamily: 'Lato_400Regular',
     marginBottom: 32,
   },
   geminiButton: {
@@ -728,6 +719,7 @@ const styles = StyleSheet.create({
   subtitleText: {
     color: '#fff',
     fontSize: 15,
+    fontFamily: 'Lato_400Regular',
     textAlign: 'center',
     lineHeight: 22,
   },
