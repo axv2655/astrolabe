@@ -6,11 +6,13 @@ base_dir = Path(__file__).resolve().parent
 
 print("Loading model...")
 # 1. Load your saved brain
-model = tf.keras.models.load_model(base_dir / 'counter_poc_model.keras')
+model = tf.keras.models.load_model(base_dir / 'node_classifier.keras')
 
-# Your class names in alphabetical order
-class_names = ['counter_node', 'unknown_space']
-manual_test_dir = base_dir / "dataset" / "manual_test"
+# Load class names from training output
+with open(base_dir / 'class_names.txt', 'r') as f:
+    class_names = [line.strip() for line in f.readlines()]
+print(f"Classes: {class_names}")
+manual_test_dir = base_dir / "manual_test"
 image_paths = sorted(manual_test_dir.glob("*.jpg")) + sorted(manual_test_dir.glob("*.png"))
 
 print("-" * 40)

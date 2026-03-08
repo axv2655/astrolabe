@@ -33,7 +33,7 @@ val_ds = tf.keras.utils.image_dataset_from_directory(
   batch_size=batch_size)
 
 class_names = train_ds.class_names
-print(f"Classes found: {class_names}") # Should print ['counter_node', 'unknown_space']
+print(f"Classes found: {class_names}")
 
 # --- 3. DATA AUGMENTATION ---
 # This flips and slightly rotates images to prevent memorization
@@ -79,6 +79,11 @@ history = model.fit(
     epochs=5
 )
 
-# --- 7. SAVE THE MODEL ---
-model.save(BASE_DIR / 'counter_poc_model.keras')
-print("Model saved successfully as 'counter_poc_model.keras'!")
+# --- 7. SAVE THE MODEL AND CLASS NAMES ---
+model.save(BASE_DIR / 'node_classifier.keras')
+print("Model saved successfully as 'node_classifier.keras'!")
+
+with open(BASE_DIR / 'class_names.txt', 'w') as f:
+    for name in class_names:
+        f.write(name + '\n')
+print(f"Class names saved to 'class_names.txt': {class_names}")

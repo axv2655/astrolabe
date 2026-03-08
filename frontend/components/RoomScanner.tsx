@@ -5,13 +5,15 @@ import { useTensorflowModel } from 'react-native-fast-tflite';
 import { useResizePlugin } from 'vision-camera-resize-plugin';
 import { useRunOnJS, useSharedValue } from 'react-native-worklets-core';
 
+const CLASS_NAMES = ['node1', 'unknown_space'];
+
 export default function RoomScanner() {
   // 1. Get Camera Permissions & Hardware
   const { hasPermission, requestPermission } = useCameraPermission();
   const device = useCameraDevice('back'); // Use the rear camera
   
   // 2. Load the TFLite Model
-  const { model, state } = useTensorflowModel(require('../assets/counter_model.tflite'));
+  const { model, state } = useTensorflowModel(require('../assets/node_classifier.tflite'));
   const { resize } = useResizePlugin();
 
   // 3. Setup React State for our UI
@@ -41,21 +43,34 @@ export default function RoomScanner() {
       const resizedFrame = resize(frame, {
         scale: { width: 224, height: 224 },
         pixelFormat: 'rgb',
-        dataType: 'float32'
+        dataType: 'uint8'
       });
 
-      const outputs = model.runSync([resizedFrame]);
+      // Convert uint8 [0,255] → float32 [0,255] for the model's baked-in preprocessing
+      const float32Data = new Float32Array(resizedFrame.length);
+      for (let i = 0; i < resizedFrame.length; i++) {
+        float32Data[i] = resizedFrame[i];
+      }
+
+      const outputs = model.runSync([float32Data]);
       const probabilities = outputs[0];
 
-      const prob0 = probabilities[0] as number;
-      const prob1 = probabilities[1] as number;
+      let maxIdx = 0;
+      let maxProb = probabilities[0] as number;
+      for (let i = 1; i < CLASS_NAMES.length; i++) {
+        const p = probabilities[i] as number;
+        if (p > maxProb) {
+          maxProb = p;
+          maxIdx = i;
+        }
+      }
 
-      const confidence = prob0 * 100;
-      const label = prob0 >= 0.8 ? "Counter Detected!" : prob1 >= 0.8 ? "Unknown Space" : "Uncertain...";
+      const confidence = maxProb * 100;
+      const label = confidence >= 80 ? CLASS_NAMES[maxIdx] : "Uncertain...";
 
       updateUI(`${label} (${confidence.toFixed(1)}%)`);
-    } catch (e) {
-      console.log("Frame processing error:", e);
+    } catch (e: any) {
+      console.log("Frame processing error:", e?.message ?? e?.toString?.() ?? JSON.stringify(e));
     }
   }, [model]);
 
@@ -73,7 +88,7 @@ export default function RoomScanner() {
         isActive={true}
         frameProcessor={frameProcessor}
         pixelFormat="rgb" // <-- CRUCIAL FOR ANDROID
-      resizeMode="cover" // Helps prevent weird stretching on the UI sidepixelFormat="yuv" // standard for iOS/Android
+        resizeMode="cover"
         
       />
       <View style={styles.overlay}>
