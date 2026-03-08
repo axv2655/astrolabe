@@ -31,6 +31,10 @@
         "foregroundImage": "./assets/images/applogo.png",
         "backgroundColor": "#ffffff"
       },
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.CAMERA"
+      ],
       "package": "com.anonymous.frontend"
     },
     "web": {
@@ -40,6 +44,13 @@
     },
     "plugins": [
       "expo-router",
+      "react-native-fast-tflite",
+      [
+        "react-native-vision-camera",
+        {
+          "cameraPermissionText": "This app needs access to your camera to scan the room and navigate ECSW.",
+          "enableMicrophonePermission": false
+        },
       [
         "@reactvision/react-viro",
         {
