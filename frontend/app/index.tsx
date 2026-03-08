@@ -1,89 +1,76 @@
-import { Button } from '@/components/ui/button';
-import { Icon } from '@/components/ui/icon';
+import { StarBackground } from '@/components/StarBackground';
 import { Text } from '@/components/ui/text';
-import { Link, Stack } from 'expo-router';
-import { MoonStarIcon, StarIcon, SunIcon } from 'lucide-react-native';
-import { useColorScheme } from 'nativewind';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import * as React from 'react';
-import { Image, type ImageStyle, View } from 'react-native';
+import { Image, type ImageStyle, Pressable, View } from 'react-native';
 
-const LOGO = {
-  light: require('@/assets/images/react-native-reusables-light.png'),
-  dark: require('@/assets/images/react-native-reusables-dark.png'),
+const LOGO = require('@/assets/images/astrolabe-logo.png');
+
+const LOGO_STYLE: ImageStyle = {
+  width: 80,
+  height: 80,
 };
 
-const SCREEN_OPTIONS = {
-  title: 'React Native Reusables',
-  headerTransparent: true,
-  headerRight: () => <ThemeToggle />,
-};
-
-const IMAGE_STYLE: ImageStyle = {
-  height: 76,
-  width: 76,
-};
-
-export default function Screen() {
-  const { colorScheme } = useColorScheme();
-
+export default function LandingScreen() {
   return (
-    <>
-      <Stack.Screen options={SCREEN_OPTIONS} />
-      <View className="flex-1 items-center justify-center gap-8 p-4">
-        <Image source={LOGO[colorScheme ?? 'light']} style={IMAGE_STYLE} resizeMode="contain" />
-        <View className="gap-2 p-4">
-          <Text className="ios:text-foreground font-mono text-sm text-muted-foreground">
-            1. Edit <Text variant="code">app/index.tsx</Text> to get started.
-          </Text>
-          <Text className="ios:text-foreground font-mono text-sm text-muted-foreground">
-            2. Save to see your changes instantly.
-          </Text>
+    <View className="flex-1 items-center justify-between bg-[#0A0E1A] px-8 py-12">
+      <StarBackground />
+
+      {/* Top spacer */}
+      <View className="flex-1" />
+
+      {/* Logo and Title */}
+      <View className="z-10 items-center gap-6">
+        {/* Logo with circular glow */}
+        <View className="h-32 w-32 items-center justify-center">
+          <View className="absolute inset-0 rounded-full border-2 border-[#5B7FA866]" />
+          <Image source={LOGO} style={LOGO_STYLE} resizeMode="contain" />
         </View>
-        <View className="flex-col gap-2">
-          <View className="flex-row gap-2">
-            <Link href="https://reactnativereusables.com" asChild>
-              <Button>
-                <Text>Browse the Docs</Text>
-              </Button>
-            </Link>
-            <Link href="https://github.com/founded-labs/react-native-reusables" asChild>
-              <Button variant="ghost">
-                <Text>Star the Repo</Text>
-                <Icon as={StarIcon} />
-              </Button>
-            </Link>
-          </View>
-          <Link href="/camera" asChild>
-            <Button>
-              <Text className="text-white group-active:text-white">Open Camera</Text>
-            </Button>
-          </Link>
-          <Link href="/ar" asChild>
-            <Button>
-              <Text className="text-white group-active:text-white">Open AR Scene</Text>
-            </Button>
-          </Link>
+
+        <Text className="text-5xl font-bold tracking-tight text-white">
+          Astrolabe
+        </Text>
+
+        <Text className="max-w-[240px] text-center text-[15px] leading-relaxed text-[#6B7885]">
+          Navigate your world{'\n'}with celestial precision
+        </Text>
+
+        {/* Get started button */}
+        <Pressable
+          onPress={() => router.push('/auth')}
+          className="mt-4 w-full max-w-[360px] overflow-hidden rounded-2xl"
+        >
+          <LinearGradient
+            colors={['#6B8DD6', '#8B7EC8', '#A474D4']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            className="items-center px-8 py-4"
+          >
+            <Text className="text-base font-semibold text-white">
+              Get started
+            </Text>
+          </LinearGradient>
+        </Pressable>
+      </View>
+
+      {/* Bottom spacer */}
+      <View className="flex-1" />
+
+      {/* Footer links */}
+      <View className="z-10 w-full items-center gap-6">
+        <View className="flex-row gap-8">
+          <Pressable>
+            <Text className="text-[13px] text-[#4A5568]">Help</Text>
+          </Pressable>
+          <Pressable>
+            <Text className="text-[13px] text-[#4A5568]">Contact us</Text>
+          </Pressable>
+          <Pressable>
+            <Text className="text-[13px] text-[#4A5568]">Privacy</Text>
+          </Pressable>
         </View>
       </View>
-    </>
-  );
-}
-
-const THEME_ICONS = {
-  light: SunIcon,
-  dark: MoonStarIcon,
-};
-
-function ThemeToggle() {
-  const { colorScheme, toggleColorScheme } = useColorScheme();
-
-  return (
-    <Button
-      onPressIn={toggleColorScheme}
-      size="icon"
-      variant="ghost"
-      className="ios:size-9 rounded-full web:mx-4">
-      <Icon as={THEME_ICONS[colorScheme ?? 'light']} className="size-5" />
-    </Button>
+    </View>
   );
 }
