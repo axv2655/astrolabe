@@ -9,8 +9,8 @@ type Tab = 'home' | 'events' | 'explore' | 'profile';
 
 const TABS: { key: Tab; label: string; icon: typeof Home; route: string }[] = [
   { key: 'home', label: 'Home', icon: Home, route: '/location-editor' },
-  { key: 'events', label: 'Events', icon: Clock, route: '/location-editor' },
-  { key: 'explore', label: 'Explore', icon: Compass, route: '/location-editor' },
+  // { key: 'events', label: 'Events', icon: Clock, route: '/location-editor' },
+  // { key: 'explore', label: 'Explore', icon: Compass, route: '/location-editor' },
   { key: 'profile', label: 'Profile', icon: User, route: '/profile' },
 ];
 
@@ -24,16 +24,14 @@ export function BottomNav({ activeTab = 'home' }: { activeTab?: Tab }) {
             <Pressable
               key={tab.key}
               className="items-center gap-1"
-              onPress={() => router.push(tab.route as any)}
-            >
+              onPress={() => router.push(tab.route as any)}>
               <Icon
                 as={tab.icon}
                 size={24}
                 className={isActive ? 'text-[#6B8DD6]' : 'text-[#4A5568]'}
               />
               <Text
-                className={`text-[11px] font-medium ${isActive ? 'text-[#6B8DD6]' : 'text-[#4A5568]'}`}
-              >
+                className={`text-[11px] font-medium ${isActive ? 'text-[#6B8DD6]' : 'text-[#4A5568]'}`}>
                 {tab.label}
               </Text>
             </Pressable>

@@ -5,40 +5,87 @@ import { Text } from '@/components/ui/text';
 import { router } from 'expo-router';
 import { ArrowLeft, Building, Calendar, Search } from 'lucide-react-native';
 import * as React from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
 
-const recentItems = [
-  {
-    name: 'ECSW 1.315',
-    subtitle: 'Engineering & Computer Science West',
-    date: 'Apr 1, 2025',
-    time: '9:41 AM',
-  },
-  {
-    name: 'JO 1.355',
-    subtitle: 'Jonsson Performance Hall',
-    date: 'Apr 1, 2025',
-    time: '9:41 AM',
-  },
-];
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
-const upcomingEvents = [
-  {
-    name: 'ECSW 1.315',
-    subtitle: 'CS 3305 — Algorithms',
-    date: 'Apr 1, 2025',
-    time: '9:41 AM',
-  },
-  {
-    name: 'JO 1.355',
-    subtitle: 'Hackathon Kickoff',
-    date: 'Apr 1, 2025',
-    time: '9:41 AM',
-  },
-];
+type ListItem = {
+  name: string;
+  subtitle: string;
+  date?: string;
+  time?: string;
+};
+
+type AutocompleteResult = {
+  name: string;
+  subtitle: string;
+};
+
+function useApi<T>(url: string | null): { data: T | null; loading: boolean; error: string | null } {
+  const [data, setData] = React.useState<T | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!url) return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch(url)
+      .then((res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((json) => {
+        if (!cancelled) setData(json);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [url]);
+
+  return { data, loading, error };
+}
 
 export default function LocationEditorScreen() {
-  const [destination, setDestination] = React.useState('');
+  const [query, setQuery] = React.useState('');
+  const [debouncedQuery, setDebouncedQuery] = React.useState('');
+  const [showSuggestions, setShowSuggestions] = React.useState(false);
+
+  // Debounce search query by 300ms
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query), 100);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const autocompleteUrl =
+    debouncedQuery.trim().length > 0
+      ? `${API_URL}/autocomplete?q=${encodeURIComponent(debouncedQuery)}`
+      : null;
+
+  const { data: suggestions, loading: suggestionsLoading } =
+    useApi<AutocompleteResult[]>(autocompleteUrl);
+
+  const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(`${API_URL}/history`);
+
+  const { data: eventsData, loading: eventsLoading } = useApi<ListItem[]>(`${API_URL}/events`);
+
+  const handleQueryChange = (text: string) => {
+    setQuery(text);
+    setShowSuggestions(text.trim().length > 0);
+  };
+
+  const handleSuggestionPress = (item: AutocompleteResult) => {
+    setQuery(item.name);
+    setShowSuggestions(false);
+    router.push('/map');
+  };
 
   return (
     <View className="flex-1 bg-[#0A0E1A]">
@@ -47,8 +94,7 @@ export default function LocationEditorScreen() {
       {/* Back button */}
       <Pressable
         onPress={() => router.back()}
-        className="absolute left-5 top-14 z-20 h-10 w-10 items-center justify-center rounded-full border border-[#2D3A4F80] bg-[#1A233299]"
-      >
+        className="absolute left-5 top-14 z-20 h-10 w-10 items-center justify-center rounded-full border border-[#2D3A4F80] bg-[#1A233299]">
         <Icon as={ArrowLeft} size={18} className="text-[#6B8DD6]" />
       </Pressable>
 
@@ -61,16 +107,47 @@ export default function LocationEditorScreen() {
           Where are you{'\n'}headed today?
         </Text>
 
-        {/* Search bar */}
-        <View className="flex-row items-center gap-3 rounded-xl border border-[#2D3A4F80] bg-[#1A233280] px-4 py-3.5">
-          <Icon as={Search} size={20} className="text-[#4A5568]" />
-          <TextInput
-            placeholder="Enter destination or room code"
-            placeholderTextColor="#4A5568"
-            value={destination}
-            onChangeText={setDestination}
-            className="flex-1 text-[15px] text-white"
-          />
+        {/* Search bar + dropdown */}
+        <View className="relative z-30">
+          <View className="flex-row items-center gap-3 rounded-xl border border-[#2D3A4F80] bg-[#1A233280] px-4 py-3.5">
+            <Icon as={Search} size={20} className="text-[#4A5568]" />
+            <TextInput
+              placeholder="Enter destination or room code"
+              placeholderTextColor="#4A5568"
+              value={query}
+              onChangeText={handleQueryChange}
+              onFocus={() => setShowSuggestions(query.trim().length > 0)}
+              onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+              returnKeyType="search"
+              className="flex-1 text-[15px] text-white"
+            />
+            {suggestionsLoading && <ActivityIndicator size="small" color="#6B8DD6" />}
+          </View>
+
+          {/* Autocomplete dropdown */}
+          {showSuggestions && suggestions && suggestions.length > 0 && (
+            <View className="absolute left-0 right-0 top-full z-40 mt-1 overflow-hidden rounded-xl border border-[#2D3A4F80] bg-[#1A2332F2]">
+              {suggestions.map((item, index) => (
+                <Pressable
+                  key={index}
+                  onPress={() => handleSuggestionPress(item)}
+                  className="flex-row items-center gap-3 px-4 py-3"
+                  style={
+                    index < suggestions.length - 1
+                      ? { borderBottomWidth: 1, borderBottomColor: '#2D3A4F40' }
+                      : undefined
+                  }>
+                  <Icon as={Search} size={16} className="text-[#4A5568]" />
+                  <View className="flex-1">
+                    <Text className="text-[14px] font-medium text-white">{item.name}</Text>
+                    {item.subtitle ? (
+                      <Text className="text-[12px] text-[#6B7885]">{item.subtitle}</Text>
+                    ) : null}
+                  </View>
+                </Pressable>
+              ))}
+            </View>
+          )}
         </View>
       </View>
 
@@ -83,36 +160,38 @@ export default function LocationEditorScreen() {
               RECENT
             </Text>
             <Pressable>
-              <Text className="text-[13px] font-medium text-[#6B8DD6]">
-                Clear all
-              </Text>
+              <Text className="text-[13px] font-medium text-[#6B8DD6]">Clear all</Text>
             </Pressable>
           </View>
-          <View className="gap-3">
-            {recentItems.map((item, index) => (
-              <Pressable
-                key={index}
-                onPress={() => router.push('/map')}
-                className="flex-row items-center gap-4 rounded-2xl border border-[#2D3A4F66] bg-[#1A233266] px-4 py-4"
-              >
-                <View className="h-10 w-10 items-center justify-center rounded-lg bg-[#6B8DD633]">
-                  <Icon as={Building} size={20} className="text-[#6B8DD6]" />
-                </View>
-                <View className="flex-1">
-                  <Text className="mb-0.5 text-[15px] font-semibold text-white">
-                    {item.name}
-                  </Text>
-                  <Text className="text-[13px] text-[#6B7885]">
-                    {item.subtitle}
-                  </Text>
-                </View>
-                <View className="items-end">
-                  <Text className="text-xs text-[#6B7885]">{item.date}</Text>
-                  <Text className="text-xs text-[#6B7885]">{item.time}</Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
+
+          {historyLoading ? (
+            <ActivityIndicator color="#6B8DD6" />
+          ) : historyData && historyData.length > 0 ? (
+            <View className="gap-3">
+              {historyData.map((item, index) => (
+                <Pressable
+                  key={index}
+                  onPress={() => router.push('/map')}
+                  className="flex-row items-center gap-4 rounded-2xl border border-[#2D3A4F66] bg-[#1A233266] px-4 py-4">
+                  <View className="h-10 w-10 items-center justify-center rounded-lg bg-[#6B8DD633]">
+                    <Icon as={Building} size={20} className="text-[#6B8DD6]" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="mb-0.5 text-[15px] font-semibold text-white">{item.name}</Text>
+                    <Text className="text-[13px] text-[#6B7885]">{item.subtitle}</Text>
+                  </View>
+                  {(item.date || item.time) && (
+                    <View className="items-end">
+                      {item.date && <Text className="text-xs text-[#6B7885]">{item.date}</Text>}
+                      {item.time && <Text className="text-xs text-[#6B7885]">{item.time}</Text>}
+                    </View>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <Text className="text-[13px] text-[#4A5568]">No recent destinations</Text>
+          )}
         </View>
 
         {/* Upcoming Events section */}
@@ -122,36 +201,38 @@ export default function LocationEditorScreen() {
               UPCOMING EVENTS
             </Text>
             <Pressable>
-              <Text className="text-[13px] font-medium text-[#6B8DD6]">
-                See all
-              </Text>
+              <Text className="text-[13px] font-medium text-[#6B8DD6]">See all</Text>
             </Pressable>
           </View>
-          <View className="gap-3">
-            {upcomingEvents.map((item, index) => (
-              <Pressable
-                key={index}
-                onPress={() => router.push('/map')}
-                className="flex-row items-center gap-4 rounded-2xl border border-[#2D3A4F66] bg-[#1A233266] px-4 py-4"
-              >
-                <View className="h-10 w-10 items-center justify-center rounded-lg bg-[#A474D433]">
-                  <Icon as={Calendar} size={20} className="text-[#A474D4]" />
-                </View>
-                <View className="flex-1">
-                  <Text className="mb-0.5 text-[15px] font-semibold text-white">
-                    {item.name}
-                  </Text>
-                  <Text className="text-[13px] text-[#6B7885]">
-                    {item.subtitle}
-                  </Text>
-                </View>
-                <View className="items-end">
-                  <Text className="text-xs text-[#6B7885]">{item.date}</Text>
-                  <Text className="text-xs text-[#6B7885]">{item.time}</Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
+
+          {eventsLoading ? (
+            <ActivityIndicator color="#6B8DD6" />
+          ) : eventsData && eventsData.length > 0 ? (
+            <View className="gap-3">
+              {eventsData.map((item, index) => (
+                <Pressable
+                  key={index}
+                  onPress={() => router.push('/map')}
+                  className="flex-row items-center gap-4 rounded-2xl border border-[#2D3A4F66] bg-[#1A233266] px-4 py-4">
+                  <View className="h-10 w-10 items-center justify-center rounded-lg bg-[#A474D433]">
+                    <Icon as={Calendar} size={20} className="text-[#A474D4]" />
+                  </View>
+                  <View className="flex-1">
+                    <Text className="mb-0.5 text-[15px] font-semibold text-white">{item.name}</Text>
+                    <Text className="text-[13px] text-[#6B7885]">{item.subtitle}</Text>
+                  </View>
+                  {(item.date || item.time) && (
+                    <View className="items-end">
+                      {item.date && <Text className="text-xs text-[#6B7885]">{item.date}</Text>}
+                      {item.time && <Text className="text-xs text-[#6B7885]">{item.time}</Text>}
+                    </View>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          ) : (
+            <Text className="text-[13px] text-[#4A5568]">No upcoming events</Text>
+          )}
         </View>
       </ScrollView>
 
