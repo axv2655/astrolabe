@@ -1,8 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Octicons from '@expo/vector-icons/Octicons';
-import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { Audio } from 'expo-av';
 import { File, Paths } from 'expo-file-system/next';
+import { useLocalSearchParams } from 'expo-router';
 import {
   ViroAmbientLight,
   ViroARScene,
@@ -11,24 +19,52 @@ import {
   ViroNode,
   ViroPolyline,
 } from '@reactvision/react-viro';
+import {
+  Camera,
+  useCameraDevice,
+  useCameraPermission,
+  useFrameProcessor,
+} from 'react-native-vision-camera';
+import { useTensorflowModel } from 'react-native-fast-tflite';
+import { useResizePlugin } from 'vision-camera-resize-plugin';
+import { useRunOnJS, useSharedValue } from 'react-native-worklets-core';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 // =============================================
-// DESTINATIONS
+// Phase state machine
 // =============================================
-const DESTINATIONS: { label: string; position: [number, number, number] }[] = [
-  { label: 'Node 1', position: [2.0, 0.0, 0.0] },
-  { label: 'Node 2', position: [4.0, 0.0, 0] },
-  { label: 'Node 3', position: [6.0, 0.0, 0.0] },
-  { label: 'Node 4', position: [6.0, 0.0, 4.0] },
-];
+type Phase = 'DETECTING' | 'LOADING' | 'NAVIGATING';
 
+// =============================================
+// TFLite class → backend node ID mapping
+// =============================================
+const CLASS_NAMES = ['node1', 'unknown_space'];
+
+const TFLITE_CLASS_TO_NODE_ID: Record<string, string> = {
+  node1: '1',
+};
+
+// =============================================
+// Room code → node ID mapping (Step 4)
+// =============================================
+const ROOM_TO_NODE: Record<string, string> = {
+  // Populate with actual room-to-node mappings as they become available
+  // e.g. 'ECSW 1.315': 'node_abc123',
+};
+
+// =============================================
+// Destination type
+// =============================================
+type Destination = { label: string; position: [number, number, number] };
+
+// =============================================
 // Trail settings
-const ARROW_SPACING = 1.5; // Fixed distance (meters) between each arrow
+// =============================================
+const ARROW_SPACING = 1.5;
 const ARROW_Y_OFFSET = -0.8;
-const DIAMOND_RADIUS = 0.35; // Size of the destination diamond
-const ARRIVAL_RADIUS = 1.0; // How close (m) to destination to show "Next" button
+const DIAMOND_RADIUS = 0.35;
+const ARRIVAL_RADIUS = 1.0;
 
 // Chevron sizing
 const CHEVRON_WIDTH = 0.18;
@@ -37,7 +73,12 @@ const LEAD_CHEVRON_WIDTH = 0.25;
 const LEAD_CHEVRON_LENGTH = 0.35;
 
 // Turn detection
-const STRAIGHT_THRESHOLD_DEG = 10; // Angles below this are considered "straight"
+const STRAIGHT_THRESHOLD_DEG = 10;
+
+// TFLite detection settings
+const CONFIDENCE_THRESHOLD = 0.5;
+const REQUIRED_CONSECUTIVE_FRAMES = 3;
+const UNKNOWN_TIMEOUT_MS = 5000;
 
 // =============================================
 // Types
@@ -45,11 +86,11 @@ const STRAIGHT_THRESHOLD_DEG = 10; // Angles below this are considered "straight
 type TurnInfo = {
   direction: 'left' | 'right';
   angleDeg: number;
-  /** How many nodes ahead the turn is (1 = at the very next node) */
   nodesAhead: number;
-  /** Label of the node WHERE the turn happens */
   atNodeLabel: string;
 };
+
+type BackendNode = { id: string; lat: number; lng: number };
 
 // =============================================
 // Materials
@@ -73,6 +114,22 @@ ViroMaterials.createMaterials({
 });
 
 // =============================================
+// Coordinate conversion
+// =============================================
+function latLngToArPosition(
+  originLat: number,
+  originLng: number,
+  nodeLat: number,
+  nodeLng: number
+): [number, number, number] {
+  const METERS_PER_LAT = 110574;
+  const METERS_PER_LNG = 93340; // cos(~33deg) * 111320, for UTD's latitude
+  const x = (nodeLng - originLng) * METERS_PER_LNG;
+  const z = -(nodeLat - originLat) * METERS_PER_LAT; // -z = forward/north in AR
+  return [x, 0, z];
+}
+
+// =============================================
 // Utility functions
 // =============================================
 
@@ -94,65 +151,36 @@ function diamondPoints(size: number): [number, number, number][] {
   ];
 }
 
-/** XZ distance (ignoring height). */
 function distanceXZ(a: [number, number, number], b: [number, number, number]): number {
   return Math.sqrt((a[0] - b[0]) ** 2 + (a[2] - b[2]) ** 2);
 }
 
-/**
- * Compute the turn from segment A→B to segment B→C.
- * Returns the signed angle in degrees (positive = right, negative = left)
- * using the 2D cross product on the XZ plane.
- */
 function computeTurnAngle(
   a: [number, number, number],
   b: [number, number, number],
   c: [number, number, number]
 ): number {
-  // Vector AB (in XZ)
   const abx = b[0] - a[0];
   const abz = b[2] - a[2];
-  // Vector BC (in XZ)
   const bcx = c[0] - b[0];
   const bcz = c[2] - b[2];
-
-  // Cross product (AB × BC) — positive means right turn, negative means left
   const cross = abx * bcz - abz * bcx;
-  // Dot product
   const dot = abx * bcx + abz * bcz;
-
   const angleRad = Math.atan2(cross, dot);
   return (angleRad * 180) / Math.PI;
 }
 
-/**
- * Starting from the current destination index, look ahead through the path
- * to find the next upcoming turn.
- *
- * Logic:
- *   - We treat the segment from the PREVIOUS node (or user position for the
- *     first segment) to the current target as the "incoming" direction.
- *   - Then we check the angle at each future node.
- *   - If three consecutive nodes are roughly collinear (angle < threshold),
- *     we skip ahead and keep looking.
- *   - The first non-straight angle is returned as the upcoming turn.
- */
 function getUpcomingTurn(
   currentIndex: number,
-  cameraPos: [number, number, number]
+  cameraPos: [number, number, number],
+  destinations: Destination[]
 ): TurnInfo | null {
-  // We need at least two more nodes after the current one to detect a turn
-  // A (prev or camera) → B (current target) → C (next) forms the first check
-  // Then B → C → D, etc.
+  const prevPos = currentIndex > 0 ? destinations[currentIndex - 1].position : cameraPos;
 
-  // Build the "path ahead" starting from the previous reference point
-  const prevPos = currentIndex > 0 ? DESTINATIONS[currentIndex - 1].position : cameraPos;
-
-  // Walk forward looking for the first non-straight angle
-  for (let i = currentIndex; i < DESTINATIONS.length - 1; i++) {
-    const a = i === currentIndex ? prevPos : DESTINATIONS[i - 1].position;
-    const b = DESTINATIONS[i].position;
-    const c = DESTINATIONS[i + 1].position;
+  for (let i = currentIndex; i < destinations.length - 1; i++) {
+    const a = i === currentIndex ? prevPos : destinations[i - 1].position;
+    const b = destinations[i].position;
+    const c = destinations[i + 1].position;
 
     const angleDeg = computeTurnAngle(a, b, c);
     const absAngle = Math.abs(angleDeg);
@@ -161,19 +189,15 @@ function getUpcomingTurn(
       return {
         direction: angleDeg > 0 ? 'right' : 'left',
         angleDeg: Math.round(absAngle),
-        nodesAhead: i - currentIndex + 1, // 1 = at the very next node
-        atNodeLabel: DESTINATIONS[i].label,
+        nodesAhead: i - currentIndex + 1,
+        atNodeLabel: destinations[i].label,
       };
     }
-    // Otherwise it's straight — keep scanning ahead
   }
 
-  return null; // No turns found ahead — path is straight to the end
+  return null;
 }
 
-/**
- * Generate arrow positions at FIXED intervals from camera toward destination.
- */
 function generateFixedSpacingTrail(
   cameraPos: [number, number, number],
   target: [number, number, number]
@@ -198,7 +222,6 @@ function generateFixedSpacingTrail(
   return positions;
 }
 
-/** Calculate rotation so an object at `from` points toward `to`. */
 function getRotationToTarget(
   from: [number, number, number],
   to: [number, number, number]
@@ -237,8 +260,6 @@ const TurnIndicator = ({ turn }: { turn: TurnInfo | null }) => {
   const arrow = isLeft ? '↰' : '↱';
   const dirLabel = isLeft ? 'Turn left' : 'Turn right';
   const color = isLeft ? '#5B9BFF' : '#FF6B6B';
-
-  // Contextual distance label
   const proximity = turn.nodesAhead === 1 ? 'at next node' : `in ${turn.nodesAhead} nodes`;
 
   return (
@@ -257,17 +278,16 @@ const TurnIndicator = ({ turn }: { turn: TurnInfo | null }) => {
 };
 
 // =============================================
-// AR Scene
+// AR Scene (Phase 3 — NAVIGATING)
 // =============================================
 const TrailARScene = (props: any) => {
-  const { destinationIndex, onDistanceUpdate, onCameraPosUpdate } =
+  const { destinationIndex, destinations, onDistanceUpdate, onCameraPosUpdate } =
     props.arSceneNavigator.viroAppProps;
-  const destination = DESTINATIONS[destinationIndex];
+  const destination = destinations[destinationIndex];
 
   const [cameraPos, setCameraPos] = useState<[number, number, number]>([0, 0, 0]);
   const sceneRef = useRef<any>(null);
 
-  // Poll camera position every 100ms for faster updates
   useEffect(() => {
     const interval = setInterval(async () => {
       if (sceneRef.current) {
@@ -287,7 +307,6 @@ const TrailARScene = (props: any) => {
     return () => clearInterval(interval);
   }, [destinationIndex]);
 
-  // Generate fixed-spacing trail from camera to destination
   const trailPositions = generateFixedSpacingTrail(cameraPos, destination.position);
 
   const trailChevron = useMemo(() => chevronPoints(CHEVRON_WIDTH, CHEVRON_LENGTH), []);
@@ -298,7 +317,6 @@ const TrailARScene = (props: any) => {
     <ViroARScene ref={sceneRef}>
       <ViroAmbientLight color="#ffffff" intensity={1000} />
 
-      {/* Trail of chevron arrows at fixed spacing */}
       {trailPositions.map((pos, index) => {
         const rotation = getRotationToTarget(pos, destination.position);
         const isLead = index === 0;
@@ -316,7 +334,6 @@ const TrailARScene = (props: any) => {
         );
       })}
 
-      {/* Gold destination diamond */}
       <ViroNode position={destination.position}>
         <ViroPolyline
           points={destDiamond}
@@ -330,9 +347,271 @@ const TrailARScene = (props: any) => {
 };
 
 // =============================================
+// Manual Node Picker Component
+// =============================================
+const ManualNodePicker = ({
+  allNodes,
+  nodesLoading,
+  onSelect,
+  onCancel,
+}: {
+  allNodes: BackendNode[];
+  nodesLoading: boolean;
+  onSelect: (nodeId: string) => void;
+  onCancel: () => void;
+}) => (
+  <View style={styles.pickerOverlay}>
+    <View style={styles.pickerContainer}>
+      <Text style={styles.pickerTitle}>Select your current node</Text>
+      {nodesLoading ? (
+        <ActivityIndicator size="small" color="#4F8EF7" />
+      ) : allNodes.length === 0 ? (
+        <Text style={styles.pickerItemCoords}>No nodes available. Check backend connection.</Text>
+      ) : (
+        <FlatList
+          data={allNodes}
+          keyExtractor={(item) => item.id}
+          style={styles.pickerList}
+          renderItem={({ item }) => (
+            <TouchableOpacity style={styles.pickerItem} onPress={() => onSelect(item.id)}>
+              <Text style={styles.pickerItemText}>{item.id}</Text>
+              <Text style={styles.pickerItemCoords}>
+                {item.lat.toFixed(5)}, {item.lng.toFixed(5)}
+              </Text>
+            </TouchableOpacity>
+          )}
+        />
+      )}
+      <TouchableOpacity style={styles.pickerCancel} onPress={onCancel}>
+        <Text style={styles.pickerCancelText}>Cancel</Text>
+      </TouchableOpacity>
+    </View>
+  </View>
+);
+
+// =============================================
+// Node Detection Phase (Phase 1 — DETECTING)
+// =============================================
+const NodeDetectionPhase = ({
+  onNodeDetected,
+  allNodes,
+  nodesLoading,
+}: {
+  onNodeDetected: (nodeId: string) => void;
+  allNodes: BackendNode[];
+  nodesLoading: boolean;
+}) => {
+  const { hasPermission, requestPermission } = useCameraPermission();
+  const device = useCameraDevice('back');
+  const { model, state: modelState } = useTensorflowModel(
+    require('../assets/node_classifier.tflite')
+  );
+  const { resize } = useResizePlugin();
+
+  const [prediction, setPrediction] = useState('Scanning...');
+  const [showManualPicker, setShowManualPicker] = useState(false);
+  const consecutiveCountRef = useRef(0);
+  const lastDetectedClassRef = useRef<string | null>(null);
+  const detectionLockedRef = useRef(false);
+
+  useEffect(() => {
+    if (!hasPermission) requestPermission();
+  }, [hasPermission]);
+
+  // Show manual picker after timeout
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowManualPicker(true);
+    }, UNKNOWN_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const lastUpdateTime = useSharedValue(0);
+
+  const handleDetection = useRunOnJS(
+    (className: string, confidence: number) => {
+      if (detectionLockedRef.current) return;
+
+      setPrediction(`${className} (${confidence.toFixed(1)}%)`);
+
+      if (className !== 'unknown_space' && confidence >= CONFIDENCE_THRESHOLD * 100) {
+        if (lastDetectedClassRef.current === className) {
+          consecutiveCountRef.current += 1;
+        } else {
+          lastDetectedClassRef.current = className;
+          consecutiveCountRef.current = 1;
+        }
+
+        if (consecutiveCountRef.current >= REQUIRED_CONSECUTIVE_FRAMES) {
+          detectionLockedRef.current = true;
+          const nodeId = TFLITE_CLASS_TO_NODE_ID[className];
+          if (nodeId) {
+            onNodeDetected(nodeId);
+          }
+        }
+      } else {
+        lastDetectedClassRef.current = null;
+        consecutiveCountRef.current = 0;
+      }
+    },
+    [onNodeDetected]
+  );
+
+  const frameProcessor = useFrameProcessor(
+    (frame) => {
+      'worklet';
+      if (model == null) return;
+
+      const now = Date.now();
+      if (now - lastUpdateTime.value < 50) return;
+      lastUpdateTime.value = now;
+
+      try {
+        const resizedFrame = resize(frame, {
+          scale: { width: 224, height: 224 },
+          pixelFormat: 'rgb',
+          dataType: 'uint8',
+        });
+
+        const float32Data = new Float32Array(resizedFrame.length);
+        for (let i = 0; i < resizedFrame.length; i++) {
+          float32Data[i] = resizedFrame[i];
+        }
+
+        const outputs = model.runSync([float32Data]);
+        const probabilities = outputs[0];
+
+        let maxIdx = 0;
+        let maxProb = probabilities[0] as number;
+        for (let i = 1; i < CLASS_NAMES.length; i++) {
+          const p = probabilities[i] as number;
+          if (p > maxProb) {
+            maxProb = p;
+            maxIdx = i;
+          }
+        }
+
+        const confidence = maxProb * 100;
+        const label = CLASS_NAMES[maxIdx];
+        handleDetection(label, confidence);
+      } catch (e: any) {
+        console.log(
+          'Frame processing error:',
+          e?.message ?? e?.toString?.() ?? JSON.stringify(e)
+        );
+      }
+    },
+    [model]
+  );
+
+  const handleManualSelect = useCallback(
+    (nodeId: string) => {
+      if (detectionLockedRef.current) return;
+      detectionLockedRef.current = true;
+      setShowManualPicker(false);
+      onNodeDetected(nodeId);
+    },
+    [onNodeDetected]
+  );
+
+  if (!hasPermission) {
+    return (
+      <View style={styles.detectingContainer}>
+        <Text style={styles.detectingText}>Requesting camera permission...</Text>
+      </View>
+    );
+  }
+  if (device == null) {
+    return (
+      <View style={styles.detectingContainer}>
+        <Text style={styles.detectingText}>No camera found</Text>
+        <TouchableOpacity
+          style={[styles.manualButton, { marginTop: 20 }]}
+          onPress={() => setShowManualPicker(true)}>
+          <Text style={styles.manualButtonText}>Select manually</Text>
+        </TouchableOpacity>
+        {showManualPicker && (
+          <ManualNodePicker
+            allNodes={allNodes}
+            nodesLoading={nodesLoading}
+            onSelect={handleManualSelect}
+            onCancel={() => setShowManualPicker(false)}
+          />
+        )}
+      </View>
+    );
+  }
+  if (modelState !== 'loaded') {
+    return (
+      <View style={styles.detectingContainer}>
+        <ActivityIndicator size="large" color="#4F8EF7" />
+        <Text style={styles.detectingText}>Loading detection model...</Text>
+        <TouchableOpacity
+          style={[styles.manualButton, { marginTop: 20 }]}
+          onPress={() => setShowManualPicker(true)}>
+          <Text style={styles.manualButtonText}>Select manually</Text>
+        </TouchableOpacity>
+        {showManualPicker && (
+          <ManualNodePicker
+            allNodes={allNodes}
+            nodesLoading={nodesLoading}
+            onSelect={handleManualSelect}
+            onCancel={() => setShowManualPicker(false)}
+          />
+        )}
+      </View>
+    );
+  }
+
+  // Deactivate camera when picker is open to avoid touch conflicts & frame processor racing
+  const cameraActive = !showManualPicker && !detectionLockedRef.current;
+
+  return (
+    <View style={styles.container}>
+      <Camera
+        style={StyleSheet.absoluteFill}
+        device={device}
+        isActive={cameraActive}
+        frameProcessor={cameraActive ? frameProcessor : undefined}
+        pixelFormat="rgb"
+        resizeMode="cover"
+      />
+
+      {!showManualPicker && (
+        <View style={styles.detectingOverlay}>
+          <Text style={styles.detectingTitle}>Detecting your location...</Text>
+          <Text style={styles.detectingPrediction}>{prediction}</Text>
+
+          <TouchableOpacity
+            style={styles.manualButton}
+            onPress={() => setShowManualPicker(true)}>
+            <Text style={styles.manualButtonText}>Select manually</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {showManualPicker && (
+        <ManualNodePicker
+          allNodes={allNodes}
+          nodesLoading={nodesLoading}
+          onSelect={handleManualSelect}
+          onCancel={() => setShowManualPicker(false)}
+        />
+      )}
+    </View>
+  );
+};
+
+// =============================================
 // Main Screen
 // =============================================
 export default function ARScreen() {
+  const { destination: destinationParam } = useLocalSearchParams<{ destination?: string }>();
+
+  // Phase state machine
+  const [phase, setPhase] = useState<Phase>('DETECTING');
+  const [startNodeId, setStartNodeId] = useState<string | null>(null);
+  const [destinations, setDestinations] = useState<Destination[]>([]);
   const [destinationIndex, setDestinationIndex] = useState(0);
   const [distToDest, setDistToDest] = useState<number>(Infinity);
   const [cameraPos, setCameraPos] = useState<[number, number, number]>([0, 0, 0]);
@@ -340,22 +619,110 @@ export default function ARScreen() {
   const [transcript, setTranscript] = useState<string | null>(null);
   const [transcriptVisible, setTranscriptVisible] = useState(false);
   const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
   const navigatorRef = useRef<any>(null);
 
-  const currentDest = DESTINATIONS[destinationIndex];
-  const isLast = destinationIndex === DESTINATIONS.length - 1;
-  const isFinished = destinationIndex >= DESTINATIONS.length;
+  // All nodes for manual picker
+  const [allNodes, setAllNodes] = useState<BackendNode[]>([]);
+  const [nodesLoading, setNodesLoading] = useState(true);
 
-  // User is "at" the destination when inside the arrival radius
-  const isAtDestination = distToDest < ARRIVAL_RADIUS;
+  // Fetch all nodes on mount (for manual picker)
+  useEffect(() => {
+    fetch(`${API_URL}/nodes`)
+      .then((res) => res.json())
+      .then((data: BackendNode[]) => {
+        setAllNodes(data);
+        setNodesLoading(false);
+      })
+      .catch((err) => {
+        console.error('Failed to fetch nodes:', err);
+        setNodesLoading(false);
+      });
+  }, []);
 
-  // Compute upcoming turn from current path position
-  const upcomingTurn = useMemo(
-    () => (isFinished ? null : getUpcomingTurn(destinationIndex, cameraPos)),
-    [destinationIndex, cameraPos, isFinished]
+  // Phase 1 → Phase 2: Node detected, fetch path
+  const handleNodeDetected = useCallback(
+    async (nodeId: string) => {
+      console.log('[AR] handleNodeDetected called with:', nodeId);
+      setStartNodeId(nodeId);
+      setPhase('LOADING');
+
+      // TODO: remove hardcoded destination once room-to-node mapping is populated
+      const destNodeId = '5';
+
+      try {
+        const url = `${API_URL}/path?a=${encodeURIComponent(nodeId)}&b=${encodeURIComponent(destNodeId)}`;
+        console.log('[AR] Fetching path:', url);
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000);
+
+        const res = await fetch(url, { signal: controller.signal });
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+          const err = await res.text();
+          console.error('[AR] Path error:', err);
+          setLoadingError(`Path error: ${err}`);
+          return;
+        }
+
+        const data = await res.json();
+        console.log('[AR] Path response:', JSON.stringify(data));
+        const waypoints: { id: number; lat: number; lng: number }[] = data.waypoints;
+
+        if (!waypoints || waypoints.length === 0) {
+          console.error('[AR] No waypoints in response');
+          setLoadingError('No waypoints returned from server');
+          return;
+        }
+
+        console.log('[AR] Waypoints count:', waypoints.length);
+
+        // Convert lat/lng to AR coordinates, using first waypoint as origin
+        const originLat = waypoints[0].lat;
+        const originLng = waypoints[0].lng;
+
+        const arDestinations: Destination[] = waypoints.map((wp) => ({
+          label: String(wp.id),
+          position: latLngToArPosition(originLat, originLng, wp.lat, wp.lng),
+        }));
+
+        // Skip the first waypoint (user's current position) — navigate to the rest
+        const navDests = arDestinations.length > 1 ? arDestinations.slice(1) : arDestinations;
+        console.log('[AR] navDests:', JSON.stringify(navDests));
+        setDestinations(navDests);
+        setDestinationIndex(0);
+        console.log('[AR] Calling setPhase NAVIGATING');
+        setPhase('NAVIGATING');
+      } catch (err: any) {
+        const msg = err.name === 'AbortError'
+          ? 'Request timed out — is the backend running?'
+          : `Network error: ${err.message}`;
+        console.error('[AR] handleNodeDetected error:', err);
+        setLoadingError(msg);
+      }
+    },
+    []
   );
 
-  // Callbacks from AR scene
+  // Debug: log every render
+  console.log('[AR] Render — phase:', phase, 'destinations:', destinations.length, 'error:', loadingError);
+
+  // Navigation state (Phase 3)
+  const currentDest = destinations[destinationIndex];
+  const isLast = destinationIndex === destinations.length - 1;
+  const isFinished = destinations.length > 0 && destinationIndex >= destinations.length;
+  const isAtDestination = distToDest < ARRIVAL_RADIUS;
+
+  const upcomingTurn = useMemo(
+    () =>
+      phase === 'NAVIGATING' && !isFinished
+        ? getUpcomingTurn(destinationIndex, cameraPos, destinations)
+        : null,
+    [destinationIndex, cameraPos, isFinished, phase, destinations]
+  );
+
   const handleDistanceUpdate = useCallback((dist: number) => {
     setDistToDest(dist);
   }, []);
@@ -367,15 +734,19 @@ export default function ARScreen() {
   const handleArrived = useCallback(() => {
     setDistToDest(Infinity);
     if (isLast) {
-      setDestinationIndex(DESTINATIONS.length);
+      setDestinationIndex(destinations.length);
     } else {
       setDestinationIndex((prev) => prev + 1);
     }
-  }, [isLast]);
+  }, [isLast, destinations.length]);
 
   const handleRestart = useCallback(() => {
     setDistToDest(Infinity);
     setDestinationIndex(0);
+    setDestinations([]);
+    setStartNodeId(null);
+    setLoadingError(null);
+    setPhase('DETECTING');
   }, []);
 
   // Audio setup
@@ -395,13 +766,11 @@ export default function ARScreen() {
     setTranscriptVisible(false);
 
     try {
-      // Unload previous audio
       if (sound) {
         await sound.unloadAsync();
         setSound(null);
       }
 
-      // Take screenshot from AR navigator
       const result = await navigatorRef.current._takeScreenshot('gemini_capture', false);
       if (!result?.success || !result?.url) {
         console.warn('Screenshot failed', result);
@@ -409,7 +778,6 @@ export default function ARScreen() {
         return;
       }
 
-      // Build FormData with screenshot — ensure file:// prefix for RN fetch
       const uri = result.url.startsWith('file://') ? result.url : `file://${result.url}`;
       const formData = new FormData();
       formData.append('file', {
@@ -418,7 +786,6 @@ export default function ARScreen() {
         type: 'image/jpeg',
       } as any);
 
-      // POST to backend
       const response = await fetch(`${API_URL}/gemini`, {
         method: 'POST',
         body: formData,
@@ -434,11 +801,9 @@ export default function ARScreen() {
       const data = await response.json();
       const { transcript: text, audio_base64 } = data;
 
-      // Show transcript
       setTranscript(text);
       setTranscriptVisible(true);
 
-      // Play audio from base64
       const audioFile = new File(Paths.cache, 'gemini_audio.mp3');
       audioFile.write(audio_base64, { encoding: 'base64' });
 
@@ -459,6 +824,60 @@ export default function ARScreen() {
     }
   }, [geminiLoading, sound]);
 
+  // =============================================
+  // Phase 1: DETECTING
+  // =============================================
+  if (phase === 'DETECTING') {
+    return (
+      <NodeDetectionPhase
+        onNodeDetected={handleNodeDetected}
+        allNodes={allNodes}
+        nodesLoading={nodesLoading}
+      />
+    );
+  }
+
+  // =============================================
+  // Phase 2: LOADING
+  // =============================================
+  if (phase === 'LOADING') {
+    return (
+      <View style={styles.loadingContainer}>
+        {loadingError ? (
+          <>
+            <Text style={styles.loadingErrorText}>{loadingError}</Text>
+            <TouchableOpacity style={styles.button} onPress={handleRestart}>
+              <Text style={styles.buttonText}>Try Again</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <ActivityIndicator size="large" color="#4F8EF7" />
+            <Text style={styles.loadingText}>Computing route...</Text>
+            {destinationParam && (
+              <Text style={styles.loadingSubText}>To: {destinationParam}</Text>
+            )}
+          </>
+        )}
+      </View>
+    );
+  }
+
+  // =============================================
+  // Phase 3: NAVIGATING — wait for destinations to be ready
+  // =============================================
+  if (phase === 'NAVIGATING' && destinations.length === 0) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4F8EF7" />
+        <Text style={styles.loadingText}>Preparing AR...</Text>
+      </View>
+    );
+  }
+
+  // =============================================
+  // Phase 3: NAVIGATING — finished state
+  // =============================================
   if (isFinished) {
     return (
       <View style={styles.finishedContainer}>
@@ -472,6 +891,9 @@ export default function ARScreen() {
     );
   }
 
+  // =============================================
+  // Phase 3: NAVIGATING — active navigation
+  // =============================================
   return (
     <View style={styles.container}>
       <ViroARSceneNavigator
@@ -482,6 +904,7 @@ export default function ARScreen() {
         }}
         viroAppProps={{
           destinationIndex,
+          destinations,
           onDistanceUpdate: handleDistanceUpdate,
           onCameraPosUpdate: handleCameraPosUpdate,
         }}
@@ -512,7 +935,7 @@ export default function ARScreen() {
       <View style={styles.overlay}>
         {/* Progress dots */}
         <View style={styles.dotsRow}>
-          {DESTINATIONS.map((_, i) => (
+          {destinations.map((_, i) => (
             <View
               key={i}
               style={[
@@ -529,7 +952,7 @@ export default function ARScreen() {
 
         <View style={styles.infoBox}>
           <Text style={styles.label}>
-            Navigating to {destinationIndex + 1} of {DESTINATIONS.length}
+            Navigating to {destinationIndex + 1} of {destinations.length}
           </Text>
           <Text style={styles.waypointName}>{currentDest.label}</Text>
           <Text style={styles.distance}>
@@ -537,7 +960,6 @@ export default function ARScreen() {
           </Text>
         </View>
 
-        {/* Only show Next button when user is inside the gold diamond */}
         {isAtDestination && (
           <TouchableOpacity style={styles.button} onPress={handleArrived}>
             <Text style={styles.buttonText}>
@@ -722,5 +1144,132 @@ const styles = StyleSheet.create({
     fontFamily: 'Lato_400Regular',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  // ---- Detecting phase ----
+  detectingContainer: {
+    flex: 1,
+    backgroundColor: '#111',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  detectingText: {
+    color: '#aaa',
+    fontSize: 16,
+    fontFamily: 'Lato_400Regular',
+    marginTop: 16,
+  },
+  detectingOverlay: {
+    position: 'absolute',
+    bottom: 60,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    borderRadius: 16,
+    padding: 20,
+    alignItems: 'center',
+  },
+  detectingTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontFamily: 'Lato_700Bold',
+    marginBottom: 8,
+  },
+  detectingPrediction: {
+    color: '#4F8EF7',
+    fontSize: 16,
+    fontFamily: 'Lato_400Regular',
+    marginBottom: 16,
+  },
+  manualButton: {
+    backgroundColor: 'rgba(79, 142, 247, 0.2)',
+    borderWidth: 1,
+    borderColor: '#4F8EF7',
+    paddingVertical: 10,
+    paddingHorizontal: 24,
+    borderRadius: 20,
+  },
+  manualButtonText: {
+    color: '#4F8EF7',
+    fontSize: 14,
+    fontFamily: 'Lato_700Bold',
+  },
+  // ---- Manual picker ----
+  pickerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  pickerContainer: {
+    backgroundColor: '#1A2332',
+    borderRadius: 16,
+    padding: 20,
+    width: '100%',
+    maxHeight: '70%',
+  },
+  pickerTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontFamily: 'Lato_700Bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  pickerList: {
+    maxHeight: 300,
+  },
+  pickerItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.1)',
+  },
+  pickerItemText: {
+    color: '#fff',
+    fontSize: 15,
+    fontFamily: 'Lato_700Bold',
+  },
+  pickerItemCoords: {
+    color: '#6B7885',
+    fontSize: 12,
+    fontFamily: 'Lato_400Regular',
+    marginTop: 2,
+  },
+  pickerCancel: {
+    marginTop: 16,
+    alignItems: 'center',
+  },
+  pickerCancelText: {
+    color: '#FF6B6B',
+    fontSize: 15,
+    fontFamily: 'Lato_700Bold',
+  },
+  // ---- Loading phase ----
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#111',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  loadingText: {
+    color: '#fff',
+    fontSize: 18,
+    fontFamily: 'Lato_700Bold',
+    marginTop: 16,
+  },
+  loadingSubText: {
+    color: '#6B7885',
+    fontSize: 14,
+    fontFamily: 'Lato_400Regular',
+    marginTop: 8,
+  },
+  loadingErrorText: {
+    color: '#FF6B6B',
+    fontSize: 16,
+    fontFamily: 'Lato_400Regular',
+    marginBottom: 24,
+    textAlign: 'center',
   },
 });

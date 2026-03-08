@@ -50,7 +50,8 @@
         {
           "cameraPermissionText": "This app needs access to your camera to scan the room and navigate ECSW.",
           "enableMicrophonePermission": false
-        },
+        }
+      ],
       [
         "@reactvision/react-viro",
         {

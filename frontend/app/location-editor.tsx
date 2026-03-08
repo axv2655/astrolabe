@@ -94,7 +94,7 @@ const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
   const handleSuggestionPress = (item: AutocompleteResult) => {
     setQuery(item);
     setShowSuggestions(false);
-    router.push('/ar');
+    router.push({ pathname: '/ar', params: { destination: item } });
   };
 
   return (
@@ -170,7 +170,7 @@ const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
               {historyData.map((item, index) => (
                 <Pressable
                   key={index}
-                  onPress={() => router.push('/ar')}
+                  onPress={() => router.push({ pathname: '/ar', params: { destination: item.name } })}
                   className="flex-row items-center gap-4 rounded-2xl border border-[#2D3A4F66] bg-[#1A233266] px-4 py-4">
                   <View className="h-10 w-10 items-center justify-center rounded-lg bg-[#6B8DD633]">
                     <Icon as={Building} size={20} className="text-[#6B8DD6]" />
@@ -211,7 +211,7 @@ const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
               {eventsData.map((item, index) => (
                 <Pressable
                   key={index}
-                  onPress={() => router.push('/ar')}
+                  onPress={() => router.push({ pathname: '/ar', params: { destination: item.name } })}
                   className="flex-row items-center gap-4 rounded-2xl border border-[#2D3A4F66] bg-[#1A233266] px-4 py-4">
                   <View className="h-10 w-10 items-center justify-center rounded-lg bg-[#A474D433]">
                     <Icon as={Calendar} size={20} className="text-[#A474D4]" />

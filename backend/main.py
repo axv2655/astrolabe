@@ -9,7 +9,7 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import certifi
 import secrets
 from fastapi.middleware.cors import CORSMiddleware
-from math import inf 
+from math import inf
 import math
 
 load_dotenv()
@@ -38,12 +38,15 @@ class LoginFormat(BaseModel):
     email: str
     password: str
 
+
 class LoginOutput(BaseModel):
     token: str
     message: str
 
+
 class TokenInput(BaseModel):
     token: str
+
 
 class EventOutput(BaseModel):
     events: list
@@ -51,7 +54,9 @@ class EventOutput(BaseModel):
 
 def get_headers() -> dict:
     if not x_api_key:
-        raise HTTPException(status_code=500, detail="x_api_key environment variable is not set")
+        raise HTTPException(
+            status_code=500, detail="x_api_key environment variable is not set"
+        )
     return {"x-api-key": x_api_key}
 
 
@@ -106,7 +111,9 @@ async def autocomplete(q: str = Query("")):
             room_code = room.get("room", "")
             full_code = tb + " " + room_code
             has_digit = any(c.isdigit() for c in full_code)
-            matches_query = query_lower in building_name.lower() or query_lower in room_code.lower()
+            matches_query = (
+                query_lower in building_name.lower() or query_lower in room_code.lower()
+            )
             if matches_query and has_digit:
                 results.append(full_code)
             if len(results) >= 5:
@@ -120,9 +127,24 @@ async def autocomplete(q: str = Query("")):
 @app.get("/history")
 async def history():
     return [
-        {"name": "ECSW 1.315", "subtitle": "Engineering and Computer Science West", "date": "Mar 6", "time": "2:30 PM"},
-        {"name": "SLC 1.102", "subtitle": "Student Learning Center", "date": "Mar 5", "time": "10:00 AM"},
-        {"name": "GR 2.302",  "subtitle": "Green Center", "date": "Mar 4", "time": "4:00 PM"},
+        {
+            "name": "ECSW 1.315",
+            "subtitle": "Engineering and Computer Science West",
+            "date": "Mar 6",
+            "time": "2:30 PM",
+        },
+        {
+            "name": "SLC 1.102",
+            "subtitle": "Student Learning Center",
+            "date": "Mar 5",
+            "time": "10:00 AM",
+        },
+        {
+            "name": "GR 2.302",
+            "subtitle": "Green Center",
+            "date": "Mar 4",
+            "time": "4:00 PM",
+        },
     ]
 
 
@@ -154,7 +176,14 @@ async def event_info():
                     start = event.get("start_time", "")
                     end = event.get("end_time", "")
                     time_str = f"{start} - {end}" if start and end else start or end
-                    events.append({"name": location, "subtitle": name, "date": event_date, "time": time_str})
+                    events.append(
+                        {
+                            "name": location,
+                            "subtitle": name,
+                            "date": event_date,
+                            "time": time_str,
+                        }
+                    )
                 if len(events) >= 3:
                     break
             if len(events) >= 3:
@@ -165,13 +194,14 @@ async def event_info():
     return events
 
 
+# Advanced Path Stuff
 
-#Advanced Path Stuff
 
-
-#Floyd Warshall is the optimal graph algo to use. It preprocesses the fastest path from node to any other node so its really good for finding paths with multiple queries.
+# Floyd Warshall is the optimal graph algo to use. It preprocesses the fastest path from node to any other node so its really good for finding paths with multiple queries.
 NODES = []
 EDGES = []
+NODE_MAP: dict[str, dict] = {}  # id -> {id, lat, lng}
+
 
 def build_floyd_warshall():
     node_ids = [n["id"] for n in NODES]
@@ -200,14 +230,17 @@ def build_floyd_warshall():
 
     return node_ids, dist, next_node
 
+
 NODE_IDS, DIST_MATRIX, NEXT_NODE = build_floyd_warshall()
 NODE_IDX = {nid: i for i, nid in enumerate(NODE_IDS)}  # was NODES_IDS
 
-def get_distance(a: str, b: str) -> float:
+
+def get_distance(a, b) -> float:
     i, j = NODE_IDX[a], NODE_IDX[b]
     return DIST_MATRIX[i][j]
 
-def reconstruct_path(a: str, b: str) -> list[str]:
+
+def reconstruct_path(a: int, b: int) -> list:
     i, j = NODE_IDX[a], NODE_IDX[b]
     if NEXT_NODE[i][j] is None:
         return []
@@ -217,33 +250,50 @@ def reconstruct_path(a: str, b: str) -> list[str]:
         path.append(NODE_IDS[i])
     return path
 
+
 @app.get("/distance")
 async def distance(a: str, b: str):
     if a not in NODE_IDX or b not in NODE_IDX:
         raise HTTPException(status_code=404, detail="Node not found")  # was details=
     return {"from": a, "to": b, "distance": get_distance(a, b)}
 
+
 @app.get("/path")
-async def path(a: str, b: str):
+async def path(a: int, b: int):
     if a not in NODE_IDX or b not in NODE_IDX:
         raise HTTPException(status_code=404, detail="Node not found")
     nodes = reconstruct_path(a, b)
     if not nodes:
         raise HTTPException(status_code=404, detail="No path exists")
-    return {"from": a, "to": b, "distance": get_distance(a, b), "path": nodes}
+    waypoints = [NODE_MAP[nid] for nid in nodes if nid in NODE_MAP]
+    waypoints = remove_redundant_nodes(waypoints)
+    return {
+        "from": a,
+        "to": b,
+        "distance": get_distance(a, b),
+        "path": nodes,
+        "waypoints": waypoints,
+    }
+
+
+@app.get("/nodes")
+async def get_nodes():
+    return [{"id": n["id"], "lat": n["lat"], "lng": n["lng"]} for n in NODES]
+
 
 offset = 0.0001
 
 
-#This is some really cool 2 pointer stuff to reduce the nodes we use making users not hate us. Basically the idea is that for this the two pointer smake it so that moves that change either your longitude and latitude by an equivalenet amount dont need to be done in succesion and by using two pointers you can slowly remove unesscary ndoes getting a path that consists of the least amount of nodes
-def get_axis(a, b) -> str | None: 
+# This is some really cool 2 pointer stuff to reduce the nodes we use making users not hate us. Basically the idea is that for this the two pointer smake it so that moves that change either your longitude and latitude by an equivalenet amount dont need to be done in succesion and by using two pointers you can slowly remove unesscary ndoes getting a path that consists of the least amount of nodes
+def get_axis(a, b) -> str | None:
     lat_diff = abs(a["lat"] - b["lat"]) > offset
     lng_diff = abs(a["lng"] - b["lng"]) > offset
-    if lat_diff and not lng_diff: 
+    if lat_diff and not lng_diff:
         return "lat"
     if lng_diff and not lat_diff:
         return "lng"
     return None
+
 
 def remove_redundant_nodes(path: list[dict]) -> list[dict]:
     if len(path) <= 2:
@@ -251,7 +301,7 @@ def remove_redundant_nodes(path: list[dict]) -> list[dict]:
 
     result = [path[0]]
     left = 0
-    current_axis = get_axis(path[left], path[1])  
+    current_axis = get_axis(path[left], path[1])
 
     for right in range(1, len(path)):
         new_axis = get_axis(path[left], path[right])
@@ -263,46 +313,55 @@ def remove_redundant_nodes(path: list[dict]) -> list[dict]:
     result.append(path[-1])
     return result
 
+
+nodes_db = client["nodes"]
+
+
 async def load_graph():
-    raw_nodes = await db["nodes"].find().to_list(length=None)
-    
+    raw_nodes = await nodes_db["node_store"].find().to_list(length=None)
+
     node_map = {n["id"]: n for n in raw_nodes}
-    
+
     NODES.clear()
     EDGES.clear()
-    
+    NODE_MAP.clear()
+
     seen_edges = set()
-    
+
     for node in raw_nodes:
-        NODES.append({"id": node["id"], "lat": node["Latitude"], "lng": node["Longitude"]})
-        
+        node_entry = {
+            "id": node["id"],
+            "lat": node["Latitude"],
+            "lng": node["Longitude"],
+        }
+        NODES.append(node_entry)
+        NODE_MAP[node["id"]] = node_entry
+
         for neighbor_id in node.get("edges", []):
             edge_key = tuple(sorted([node["id"], neighbor_id]))
             if edge_key in seen_edges:
                 continue
             seen_edges.add(edge_key)
-            
+
             neighbor = node_map.get(neighbor_id)
             if not neighbor:
                 continue
-            
+
             dlat = node["Latitude"] - neighbor["Latitude"]
             dlng = node["Longitude"] - neighbor["Longitude"]
             weight = math.sqrt(dlat**2 + dlng**2)
-            
+
             EDGES.append((node["id"], neighbor_id, weight))
-    
+
     global NODE_IDS, DIST_MATRIX, NEXT_NODE, NODE_IDX
     NODE_IDS, DIST_MATRIX, NEXT_NODE = build_floyd_warshall()
     NODE_IDX = {nid: i for i, nid in enumerate(NODE_IDS)}
 
+
 @app.on_event("startup")
 async def startup():
     await load_graph()
-    print(
-        f"[DEBUG] /events returning {len(events)} events: {[e['name'] for e in events]}"
-    )
-    return events
+    build_floyd_warshall()
 
 
 @app.post("/gemini")
