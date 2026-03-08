@@ -12,7 +12,7 @@ x_api_key = os.getenv("x_api_key")
 
 #Fetching event data as some json. Date format is year-month-day
 async def fetch_event_info(date: str):
-    url = f"https://api.utdnebula.com/astra/{date}"
+    url = f"https://api.utdnebula.com/mazevo/{date}"
     headers = {"x-api-key":x_api_key}
 
     async with httpx.AsyncClient() as client:
@@ -39,7 +39,7 @@ def prune_data(data):
         print("Looping")
         for room in building.get("rooms",[]):
             for event in room.get("events",[]):
-                name = event.get("activity_name")
+                name = event.get("eventName")
                 if name and "No Event Requesting" not in name:
                     events.append(event)    
     return events
