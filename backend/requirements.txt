@@ -6,3 +6,6 @@ pymongo
 httpx
 datetime
 dotenv
+google-genai
+elevenlabs
+python-multipart
