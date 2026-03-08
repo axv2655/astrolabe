@@ -13,10 +13,10 @@ import {
 // DESTINATIONS
 // =============================================
 const DESTINATIONS: { label: string; position: [number, number, number] }[] = [
-  { label: 'Library Entrance', position: [3.0, 0.0, -6.0] },
-  { label: 'Science Building', position: [-4.0, 0.0, -12.0] },
-  { label: 'Student Center', position: [6.0, 0.0, -20.0] },
-  { label: 'Parking Garage', position: [-2.0, 0.0, -28.0] },
+  { label: 'Node 1', position: [2.0, 0.0, 0.0] },
+  { label: 'Node 2', position: [4.0, 0.0, 0] },
+  { label: 'Node 3', position: [6.0, 0.0, 0.0] },
+  { label: 'Node 4', position: [6.0, 0.0, 4.0] },
 ];
 
 // Trail settings
