@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Audio } from 'expo-av';
+import { File, Paths } from 'expo-file-system/next';
 import {
   ViroAmbientLight,
   ViroARScene,
@@ -8,6 +10,8 @@ import {
   ViroNode,
   ViroPolyline,
 } from '@reactvision/react-viro';
+
+const API_URL = process.env.EXPO_PUBLIC_API_URL;
 
 // =============================================
 // DESTINATIONS
@@ -343,6 +347,11 @@ export default function ARScreen() {
   const [destinationIndex, setDestinationIndex] = useState(0);
   const [distToDest, setDistToDest] = useState<number>(Infinity);
   const [cameraPos, setCameraPos] = useState<[number, number, number]>([0, 0, 0]);
+  const [geminiLoading, setGeminiLoading] = useState(false);
+  const [transcript, setTranscript] = useState<string | null>(null);
+  const [transcriptVisible, setTranscriptVisible] = useState(false);
+  const [sound, setSound] = useState<Audio.Sound | null>(null);
+  const navigatorRef = useRef<any>(null);
 
   const currentDest = DESTINATIONS[destinationIndex];
   const isLast = destinationIndex === DESTINATIONS.length - 1;
@@ -380,6 +389,85 @@ export default function ARScreen() {
     setDestinationIndex(0);
   }, []);
 
+  // Audio setup
+  useEffect(() => {
+    Audio.setAudioModeAsync({ playsInSilentModeIOS: true, shouldDuckAndroid: true });
+  }, []);
+  useEffect(() => {
+    return () => { sound?.unloadAsync(); };
+  }, [sound]);
+
+  const handleGemini = useCallback(async () => {
+    if (geminiLoading) return;
+    setGeminiLoading(true);
+    setTranscript(null);
+    setTranscriptVisible(false);
+
+    try {
+      // Unload previous audio
+      if (sound) {
+        await sound.unloadAsync();
+        setSound(null);
+      }
+
+      // Take screenshot from AR navigator
+      const result = await navigatorRef.current._takeScreenshot('gemini_capture', false);
+      if (!result?.success || !result?.url) {
+        console.warn('Screenshot failed', result);
+        setGeminiLoading(false);
+        return;
+      }
+
+      // Build FormData with screenshot — ensure file:// prefix for RN fetch
+      const uri = result.url.startsWith('file://') ? result.url : `file://${result.url}`;
+      const formData = new FormData();
+      formData.append('file', {
+        uri,
+        name: 'capture.jpg',
+        type: 'image/jpeg',
+      } as any);
+
+      // POST to backend
+      const response = await fetch(`${API_URL}/gemini`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const err = await response.text();
+        console.error('Gemini endpoint error:', err);
+        setGeminiLoading(false);
+        return;
+      }
+
+      const data = await response.json();
+      const { transcript: text, audio_base64 } = data;
+
+      // Show transcript
+      setTranscript(text);
+      setTranscriptVisible(true);
+
+      // Play audio from base64
+      const audioFile = new File(Paths.cache, 'gemini_audio.mp3');
+      audioFile.write(audio_base64, { encoding: 'base64' });
+
+      const { sound: newSound } = await Audio.Sound.createAsync({ uri: audioFile.uri });
+      setSound(newSound);
+
+      newSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          setTimeout(() => setTranscriptVisible(false), 2000);
+        }
+      });
+
+      await newSound.playAsync();
+    } catch (err) {
+      console.error('handleGemini error:', err);
+    } finally {
+      setGeminiLoading(false);
+    }
+  }, [geminiLoading, sound]);
+
   if (isFinished) {
     return (
       <View style={styles.finishedContainer}>
@@ -396,6 +484,7 @@ export default function ARScreen() {
   return (
     <View style={styles.container}>
       <ViroARSceneNavigator
+        ref={navigatorRef}
         autofocus={true}
         initialScene={{
           scene: TrailARScene as any,
@@ -407,6 +496,27 @@ export default function ARScreen() {
         }}
         style={styles.flex}
       />
+
+      {/* Gemini button */}
+      <TouchableOpacity
+        style={styles.geminiButton}
+        onPress={handleGemini}
+        activeOpacity={0.7}
+        disabled={geminiLoading}
+      >
+        {geminiLoading ? (
+          <ActivityIndicator color="#fff" size="small" />
+        ) : (
+          <Text style={styles.geminiButtonIcon}>&#10024;</Text>
+        )}
+      </TouchableOpacity>
+
+      {/* Subtitle overlay */}
+      {transcriptVisible && transcript && (
+        <View style={styles.subtitleContainer}>
+          <Text style={styles.subtitleText}>{transcript}</Text>
+        </View>
+      )}
 
       {/* Overlay UI */}
       <View style={styles.overlay}>
@@ -585,5 +695,40 @@ const styles = StyleSheet.create({
     color: '#888',
     fontSize: 16,
     marginBottom: 32,
+  },
+  geminiButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: 'rgba(107, 78, 255, 0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  geminiButtonIcon: {
+    color: '#fff',
+    fontSize: 24,
+  },
+  subtitleContainer: {
+    position: 'absolute',
+    bottom: 240,
+    left: 20,
+    right: 20,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    borderRadius: 12,
+    padding: 14,
+  },
+  subtitleText: {
+    color: '#fff',
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
   },
 });
