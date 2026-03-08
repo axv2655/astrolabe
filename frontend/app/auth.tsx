@@ -5,14 +5,45 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { ArrowLeft, Lock, Mail } from 'lucide-react-native';
 import * as React from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-native';
+
+const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
 
 export default function AuthScreen() {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
+  const [loading, setLoading] = React.useState(false);
 
-  const handleSubmit = () => {
-    router.push('/location-editor');
+  const handleSubmit = async () => {
+    if (!email.trim() || !password.trim()) {
+      Alert.alert('Missing fields', 'Please enter your email and password.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        Alert.alert('Error', data.detail ?? 'Login failed.');
+        return;
+      }
+
+      // Store token however you're managing state (AsyncStorage, context, etc.)
+      // await AsyncStorage.setItem('token', data.token);
+
+      router.push('/location-editor');
+    } catch (err) {
+      Alert.alert('Network error', 'Could not reach the server.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -74,6 +105,7 @@ export default function AuthScreen() {
         {/* Submit button */}
         <Pressable
           onPress={handleSubmit}
+          disabled={loading}
           className="mt-4 w-full overflow-hidden rounded-xl"
         >
           <LinearGradient
@@ -82,9 +114,10 @@ export default function AuthScreen() {
             end={{ x: 1, y: 0 }}
             className="items-center px-8 py-4"
           >
-            <Text className="text-base font-semibold text-white">
-              Log in / Sign Up
-            </Text>
+            {loading
+              ? <ActivityIndicator color="white" />
+              : <Text className="text-base font-semibold text-white">Log in / Sign Up</Text>
+            }
           </LinearGradient>
         </Pressable>
       </View>

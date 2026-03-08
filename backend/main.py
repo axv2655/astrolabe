@@ -4,27 +4,83 @@ import base64
 import httpx
 import os
 from dotenv import load_dotenv
+from pydantic import BaseModel
+from motor.motor_asyncio import AsyncIOMotorClient
+import certifi
+import secrets
+from fastapi.middleware.cors import CORSMiddleware
+
+
 
 load_dotenv()
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 x_api_key = os.getenv("x_api_key")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")
 ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
 
+mongo_uri = os.getenv("MONGO_URI")
+client = AsyncIOMotorClient(mongo_uri, tlsCAFile=certifi.where())
+db = client["UserData"]
+user_collections = db["userDeats"]
+
+
+class LoginFormat(BaseModel):
+    email: str
+    password: str
+
+class LoginOutput(BaseModel):
+    token: str
+    message: str
+
+class TokenInput(BaseModel):
+    token: str
+
+class EventOutput(BaseModel):
+    events: list
+
 
 def get_headers() -> dict:
     if not x_api_key:
-        raise HTTPException(
-            status_code=500, detail="x_api_key environment variable is not set"
-        )
+        raise HTTPException(status_code=500, detail="x_api_key environment variable is not set")
     return {"x-api-key": x_api_key}
 
 
 @app.get("/")
 async def root():
     return {"message": "Hello from server", "time": str(datetime.now())}
+
+
+@app.post("/login", response_model=LoginOutput)
+async def login(user: LoginFormat):
+    db_user = await user_collections.find_one({"email": user.email})
+    if not db_user:
+        raise HTTPException(status_code=401, detail="User was never made")
+    if db_user.get("password") != user.password:
+        raise HTTPException(status_code=401, detail="User password was wrong")
+
+    token = secrets.token_hex(16)
+    await user_collections.update_one({"email": user.email}, {"$set": {"token": token}})
+    return {"token": token, "message": "Logged in properly"}
+
+
+@app.post("/pastEvent", response_model=EventOutput)
+async def past_event_fetching(input_data: TokenInput):
+    db_user = await user_collections.find_one({"token": input_data.token})
+    if not db_user:
+        raise HTTPException(status_code=401, detail="This user is not signed in")
+
+    past_events = db_user.get("past_events", [])
+    return {"events": past_events}
 
 
 @app.get("/autocomplete")
@@ -41,7 +97,6 @@ async def autocomplete(q: str = Query("")):
 
     data = response.json()
     buildings = data.get("data", [])
-    print(f"[DEBUG] /autocomplete q={q!r} | total buildings: {len(buildings)}")
 
     results = []
     query_lower = q.strip().lower()
@@ -53,12 +108,7 @@ async def autocomplete(q: str = Query("")):
             room_code = room.get("room", "")
             full_code = tb + " " + room_code
             has_digit = any(c.isdigit() for c in full_code)
-            matches_query = (
-                query_lower in building_name.lower() or query_lower in room_code.lower()
-            )
-            print(
-                f"[DEBUG]   room={full_code!r} matches={matches_query} has_digit={has_digit}"
-            )
+            matches_query = query_lower in building_name.lower() or query_lower in room_code.lower()
             if matches_query and has_digit:
                 results.append(full_code)
             if len(results) >= 5:
@@ -66,31 +116,15 @@ async def autocomplete(q: str = Query("")):
         if len(results) >= 5:
             break
 
-    print(f"[DEBUG] /autocomplete returning: {results}")
     return results
 
 
 @app.get("/history")
 async def history():
     return [
-        {
-            "name": "ECSW 1.315",
-            "subtitle": "Engineering and Computer Science West",
-            "date": "Mar 6",
-            "time": "2:30 PM",
-        },
-        {
-            "name": "SLC 1.102",
-            "subtitle": "Student Learning Center",
-            "date": "Mar 5",
-            "time": "10:00 AM",
-        },
-        {
-            "name": "GR 2.302",
-            "subtitle": "Green Center",
-            "date": "Mar 4",
-            "time": "4:00 PM",
-        },
+        {"name": "ECSW 1.315", "subtitle": "Engineering and Computer Science West", "date": "Mar 6", "time": "2:30 PM"},
+        {"name": "SLC 1.102", "subtitle": "Student Learning Center", "date": "Mar 5", "time": "10:00 AM"},
+        {"name": "GR 2.302",  "subtitle": "Green Center", "date": "Mar 4", "time": "4:00 PM"},
     ]
 
 
@@ -108,7 +142,6 @@ async def event_info():
     events = []
     event_date = data["data"].get("date", date)
     buildings = data["data"].get("buildings", [])
-    print(f"[DEBUG] /events date={date} | total buildings: {len(buildings)}")
 
     for building in buildings:
         building_name = building.get("building")
@@ -119,21 +152,11 @@ async def event_info():
             for event in room.get("events", []):
                 name = event.get("eventName") or event.get("section", "")
                 filtered_name = name and "No Event Requesting" not in name
-                print(
-                    f"[DEBUG]   location={location!r} has_digit={has_digit} name={name!r} passes_filter={bool(filtered_name and has_digit)}"
-                )
                 if filtered_name and has_digit:
                     start = event.get("start_time", "")
                     end = event.get("end_time", "")
                     time_str = f"{start} - {end}" if start and end else start or end
-                    events.append(
-                        {
-                            "name": location,
-                            "subtitle": name,
-                            "date": event_date,
-                            "time": time_str,
-                        }
-                    )
+                    events.append({"name": location, "subtitle": name, "date": event_date, "time": time_str})
                 if len(events) >= 3:
                     break
             if len(events) >= 3:
