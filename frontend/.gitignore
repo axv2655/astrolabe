@@ -9,7 +9,7 @@ android/
 .expo/
 dist/
 web-build/
-
+android/
 # Native
 *.orig.*
 *.jks

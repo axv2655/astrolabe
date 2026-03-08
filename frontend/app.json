@@ -4,29 +4,31 @@
     "slug": "frontend",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/applogo.png",
     "scheme": "frontend",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/images/splash.png",
+      "image": "./assets/images/applogo.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
-    "assetBundlePatterns": [
-      "**/*"
-    ],
+    "assetBundlePatterns": ["**/*"],
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs access to your camera to scan the room and navigate ECSW."
+        "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photos",
+        "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos",
+        "NSCameraUsageDescription": "Allow Astrolabe to access your camera for AR experiences.",
+        "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use your microphone",
+        "NSLocationWhenInUseUsageDescription": "Allow Astrolabe to use your location for AR GPS navigation."
       },
       "bundleIdentifier": "com.anonymous.frontend"
     },
     "android": {
       "edgeToEdgeEnabled": true,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/applogo.png",
         "backgroundColor": "#ffffff"
       },
       "permissions": [
@@ -48,6 +50,22 @@
         {
           "cameraPermissionText": "This app needs access to your camera to scan the room and navigate ECSW.",
           "enableMicrophonePermission": false
+        },
+      [
+        "@reactvision/react-viro",
+        {
+          "ios": {
+            "cameraUsagePermission": "Allow Astrolabe to access your camera for AR experiences."
+          },
+          "android": {
+            "cameraUsagePermission": "Allow Astrolabe to access your camera for AR experiences."
+          }
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow Astrolabe to use your location for AR GPS navigation."
         }
       ]
     ],

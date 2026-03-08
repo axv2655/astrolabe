@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+pydantic
+motor
+httpx
+python-dotenv
+certifi
+google-genai
+elevenlabs
+python-multipart

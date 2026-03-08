@@ -1,48 +1,70 @@
-import { Button } from '@/components/ui/button';
-import { Icon } from '@/components/ui/icon';
-import { Stack } from 'expo-router';
-import { MoonStarIcon, SunIcon } from 'lucide-react-native';
-import { useColorScheme } from 'nativewind';
+import { StarBackground } from '@/components/StarBackground';
+import { Text } from '@/components/ui/text';
+import { LinearGradient } from 'expo-linear-gradient';
+import { router } from 'expo-router';
 import * as React from 'react';
-import { View } from 'react-native';
+import { Image, type ImageStyle, Pressable, View } from 'react-native';
 
-// Import your new scanner component
-import RoomScanner from '@/components/RoomScanner';
+const LOGO = require('@/assets/images/applogo.png');
 
-const SCREEN_OPTIONS = {
-  title: 'Room Scanner POC',
-  headerTransparent: true,
-  headerRight: () => <ThemeToggle />,
+const LOGO_STYLE: ImageStyle = {
+  width: 240,
+  height: 240,
 };
 
-export default function Screen() {
+export default function LandingScreen() {
   return (
-    <>
-      <Stack.Screen options={SCREEN_OPTIONS} />
-      {/* We use flex-1 to make sure the scanner takes up the whole screen under the header */}
-      <View className="flex-1 bg-background">
-        <RoomScanner />
+    <View className="flex-1 items-center justify-between bg-[#0A0E1A] px-8 py-12">
+      <StarBackground />
+
+      {/* Top spacer */}
+      <View className="flex-1" />
+
+      {/* Logo and Title */}
+      <View className="z-10 items-center gap-8">
+        {/* Logo with circular glow */}
+        <View className="h-48 w-48 items-center justify-center">
+          <View className="absolute inset-0 rounded-full border-2 border-[#5B7FA866]" />
+          <Image source={LOGO} style={LOGO_STYLE} resizeMode="contain" />
+        </View>
+
+        <Text className="font-instrument text-5xl tracking-tight text-white">Astrolabe</Text>
+
+        <Text className="max-w-[240px] text-center text-[15px] leading-relaxed text-[#6B7885]">
+          Navigate your world{'\n'}with celestial precision
+        </Text>
+
+        {/* Get started button */}
+        <Pressable
+          onPress={() => router.push('/auth')}
+          className="mt-4 w-full max-w-[480px] overflow-hidden rounded-2xl">
+          <LinearGradient
+            colors={['#6B8DD6', '#8B7EC8', '#A474D4']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            className="items-center px-8 py-4">
+            <Text className="font-lato-bold text-base text-white">Get started</Text>
+          </LinearGradient>
+        </Pressable>
       </View>
-    </>
-  );
-}
 
-// Keeping your Theme Toggle intact!
-const THEME_ICONS = {
-  light: SunIcon,
-  dark: MoonStarIcon,
-};
+      {/* Bottom spacer */}
+      <View className="flex-1" />
 
-function ThemeToggle() {
-  const { colorScheme, toggleColorScheme } = useColorScheme();
-
-  return (
-    <Button
-      onPressIn={toggleColorScheme}
-      size="icon"
-      variant="ghost"
-      className="ios:size-9 rounded-full web:mx-4">
-      <Icon as={THEME_ICONS[colorScheme ?? 'light']} className="size-5" />
-    </Button>
+      {/* Footer links */}
+      <View className="z-10 w-full items-center gap-6">
+        <View className="flex-row gap-8">
+          <Pressable>
+            <Text className="text-[13px] text-[#4A5568]">Help</Text>
+          </Pressable>
+          <Pressable>
+            <Text className="text-[13px] text-[#4A5568]">Contact us</Text>
+          </Pressable>
+          <Pressable>
+            <Text className="text-[13px] text-[#4A5568]">Privacy</Text>
+          </Pressable>
+        </View>
+      </View>
+    </View>
   );
 }

@@ -7,4 +7,8 @@ const config = getDefaultConfig(__dirname);
 config.resolver.assetExts.push('tflite');
 
 // 2. Pass the modified config into NativeWind
+config.resolver.assetExts.push(
+  'obj', 'mtl', 'JPG', 'vrx', 'hdr', 'gltf', 'glb', 'bin', 'arobject', 'gif'
+);
+
 module.exports = withNativeWind(config, { input: './global.css', inlineRem: 16 });
