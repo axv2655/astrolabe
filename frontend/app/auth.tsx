@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { ArrowLeft, Lock, Mail } from 'lucide-react-native';
 import * as React from 'react';
 import { ActivityIndicator, Alert, Pressable, TextInput, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8000';
 
@@ -36,9 +37,7 @@ export default function AuthScreen() {
         return;
       }
 
-      // Store token however you're managing state (AsyncStorage, context, etc.)
-      // await AsyncStorage.setItem('token', data.token);
-
+      await AsyncStorage.setItem('token', data.token);
       router.push('/location-editor');
     } catch (err) {
       Alert.alert('Network error', 'Could not reach the server.');

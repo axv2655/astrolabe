@@ -6,6 +6,7 @@ import { router } from 'expo-router';
 import { ArrowLeft, Building, Calendar, Search } from 'lucide-react-native';
 import * as React from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL;
 console.log('[DEBUG] API_URL:', API_URL);
@@ -59,6 +60,11 @@ export default function LocationEditorScreen() {
   const [query, setQuery] = React.useState('');
   const [debouncedQuery, setDebouncedQuery] = React.useState('');
   const [showSuggestions, setShowSuggestions] = React.useState(false);
+  const [token, setToken] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    AsyncStorage.getItem('token').then(setToken);
+  }, []);
 
   // Debounce search query by 300ms
   React.useEffect(() => {
@@ -74,7 +80,9 @@ export default function LocationEditorScreen() {
   const { data: suggestions, loading: suggestionsLoading } =
     useApi<AutocompleteResult[]>(autocompleteUrl);
 
-  const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(`${API_URL}/history`);
+const { data: historyData, loading: historyLoading } = useApi<ListItem[]>(
+  token ? `${API_URL}/history` : null
+);
 
   const { data: eventsData, loading: eventsLoading } = useApi<ListItem[]>(`${API_URL}/events`);
 
