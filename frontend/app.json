@@ -30,8 +30,10 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
+        "android.permission.CAMERA",
         "android.permission.CAMERA"
-      ]
+      ],
+      "package": "com.anonymous.frontend"
     },
     "web": {
       "bundler": "metro",

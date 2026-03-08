@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Camera, useCameraDevice, useCameraPermission, useFrameProcessor } from 'react-native-vision-camera';
 import { useTensorflowModel } from 'react-native-fast-tflite';
 import { useResizePlugin } from 'vision-camera-resize-plugin';
-import { useRunOnJS } from 'react-native-worklets-core';
+import { useRunOnJS, useSharedValue } from 'react-native-worklets-core';
 
 export default function RoomScanner() {
   // 1. Get Camera Permissions & Hardware
@@ -11,7 +11,7 @@ export default function RoomScanner() {
   const device = useCameraDevice('back'); // Use the rear camera
   
   // 2. Load the TFLite Model
-  const { model, state } = useTensorflowModel(require('./assets/counter_model.tflite'));
+  const { model, state } = useTensorflowModel(require('../assets/counter_model.tflite'));
   const { resize } = useResizePlugin();
 
   // 3. Setup React State for our UI
@@ -21,40 +21,39 @@ export default function RoomScanner() {
     if (!hasPermission) requestPermission();
   }, [hasPermission]);
 
+  const lastUpdateTime = useSharedValue(0);
+
   // This function safely bridges the background camera thread back to the main UI thread
-  const updateUI = useRunOnJS((text) => {
+  const updateUI = useRunOnJS((text: string) => {
     setPrediction(text);
   }, []);
 
   // 4. The Frame Processor (Runs ~30 times a second in the background)
   const frameProcessor = useFrameProcessor((frame) => {
     'worklet';
-    // If the model isn't loaded yet, do nothing
     if (model == null) return;
 
+    const now = Date.now();
+    if (now - lastUpdateTime.value < 50) return;
+    lastUpdateTime.value = now;
+
     try {
-      // Step A: Shrink the massive camera frame to the 224x224 your model expects
       const resizedFrame = resize(frame, {
         scale: { width: 224, height: 224 },
         pixelFormat: 'rgb',
-        dataType: 'uint8'
+        dataType: 'float32'
       });
 
-      // Step B: Run the prediction synchronously
       const outputs = model.runSync([resizedFrame]);
-      const probabilities = outputs[0]; // Returns array like [0.98, 0.02]
+      const probabilities = outputs[0];
 
-      // Step C: Figure out the winner (Index 0 = counter_node, Index 1 = unknown_space)
       const prob0 = probabilities[0] as number;
       const prob1 = probabilities[1] as number;
 
-      const isCounter = prob0 > prob1;
-      const confidence = isCounter ? prob0 * 100 : prob1 * 100;
-      const label = isCounter ? "Counter Detected!" : "Unknown Space";
+      const confidence = prob0 * 100;
+      const label = prob0 >= 0.8 ? "Counter Detected!" : prob1 >= 0.8 ? "Unknown Space" : "Uncertain...";
 
-      // Step D: Send the result to the React State
       updateUI(`${label} (${confidence.toFixed(1)}%)`);
-      
     } catch (e) {
       console.log("Frame processing error:", e);
     }
@@ -73,7 +72,9 @@ export default function RoomScanner() {
         device={device}
         isActive={true}
         frameProcessor={frameProcessor}
-        pixelFormat="yuv" // standard for iOS/Android
+        pixelFormat="rgb" // <-- CRUCIAL FOR ANDROID
+      resizeMode="cover" // Helps prevent weird stretching on the UI sidepixelFormat="yuv" // standard for iOS/Android
+        
       />
       <View style={styles.overlay}>
         <Text style={styles.predictionText}>{prediction}</Text>
