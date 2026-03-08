@@ -20,9 +20,7 @@ async def fetch_event_info(date: str):
         response.raise_for_status()
     
     data = response.json()
-    print(data)
     cleaned_data = prune_data(data["data"])
-    print(cleaned_data)
     return cleaned_data[:3]
 
 @router.get("/{date}")
@@ -32,11 +30,8 @@ async def event_info(date: str):
 
 #Remove empty columns from the json
 def prune_data(data):
-    print(data)
     events = []
-    print("In function")
     for building in data.get("buildings",[]):
-        print("Looping")
         for room in building.get("rooms",[]):
             for event in room.get("events",[]):
                 name = event.get("eventName")
@@ -44,3 +39,5 @@ def prune_data(data):
                     events.append(event)    
     return events
                     
+                
+

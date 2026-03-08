@@ -1,12 +1,13 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from pymongo import MongoClient
+from motor.motor_asyncio import AsyncIOMotorClient
+import certifi
 import os
 import secrets
 
 router = APIRouter()
 mongo_uri = os.getenv("MONGO_URI")
-client = MongoClient(mongo_uri)
+client = AsyncIOMotorClient(mongo_uri,tlsCAFile=certifi.where())
 db = client["UserData"]
 user_collections = db["userDeats"]
 
@@ -20,7 +21,7 @@ class LoginOutput(BaseModel):
 
 @router.post("/login", response_model = LoginOutput)
 async def login(user:LoginFormat):
-    db_user = user_collections.find_one({"email":user.email})
+    db_user = await user_collections.find_one({"email":user.email})
     if not db_user:
         raise HTTPException(status_code=401, detail="User was never made")
     
@@ -28,5 +29,5 @@ async def login(user:LoginFormat):
         raise HTTPException(status_code=401, detail="User password was wrong")
 
     token = secrets.token_hex(16)
-    user_collections.update_one({"email":user.email},{"$set":{"token":token}})
+    await user_collections.update_one({"email":user.email},{"$set":{"token":token}})
     return {"token":token, "message":"Logged in properly"}
